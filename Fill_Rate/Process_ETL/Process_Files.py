@@ -48,6 +48,11 @@ def read_files(input_path):
         df_consolidated = lst_files_xlsx[0]
     else:
          df_consolidated = pd.concat(lst_files_xlsx, axis=0, ignore_index=True)
+
+
+    for col in df_consolidated.columns:
+        df_consolidated[col] = df_consolidated[col].astype(str).str.upper().str.strip()
+
     return df_consolidated
 
 def asign_country_code(df_consolidated, df_country):
@@ -59,6 +64,8 @@ def asign_country_code(df_consolidated, df_country):
         df_consolidated['code concat country'] = df_consolidated['Country Code'].astype(str) + df_consolidated['Destination Country'].astype(str)
 
         # Crear un mapa de códigos de país a nombres de país
+        for col in df_country.columns:
+            df_country[col] = df_country[col].astype(str).str.upper().str.strip()
         country_map = df_country.set_index('Country Code Concat')['Country']
 
         # Usar .map() para crear la nueva columna 'new country'
@@ -84,7 +91,8 @@ def process_columns(df_consolidated,lst_columns):
         mapeo_deseado = {
             'Sold-To-Customer Code': 'fk_Sold_To_Customer_Code',
             'Sold-To Customer Code': 'fk_Sold_To_Customer_Code', # La clave es diferente, el valor es el mismo
-            'Country Material': 'fk_SKU'
+            'Country Material': 'fk_SKU',
+            'Global Material': 'fk_SKU',
         }
 
         # Crear un nuevo diccionario de renombre que solo incluye las columnas existentes
@@ -107,7 +115,7 @@ def process_columns(df_consolidated,lst_columns):
         df_consolidated['fk_date_country_customer_clasification'] = (df_consolidated['fk_year_month'] + '-' +
                                                             df_consolidated['fk_Country']+ '-' +
                                                             df_consolidated['fk_Sold_To_Customer_Code']+ '-' +
-                                                            df_consolidated['clasification']).str.lower().str.strip()
+                                                            df_consolidated['clasification']).str.upper().str.strip()
         df_consolidated['fk_Date']=pd.to_datetime(df_consolidated['fk_year_month'], errors='coerce')
        
         

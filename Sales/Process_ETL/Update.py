@@ -10,7 +10,7 @@ from Fill_Rate.Process_ETL.Update import read_parquets_to_update,update_parquets
 def main():
     # --- CONFIGURACIÓN DE RUTAS ---
     path_parquets_historics = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Sales\prueba'
-    path_files_updates = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\prueba'
+    path_files_updates = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Mothly_Update'
     path_country_codes = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Shared_Information_for_Projects\Country\Region_Country_codes.xlsx'
     
     # --- PROCESAMIENTO DE ARCHIVOS DE ACTUALIZACIÓN ---
@@ -29,12 +29,12 @@ def main():
 
     # --- LECTURA Y ACTUALIZACIÓN DE DATOS HISTÓRICOS ---
     lst_year_month_files_update = df_update['fk_year_month'].unique().tolist()
-    df_parquets_historic = read_parquets_to_update(path_parquets_historics, lst_year_month_files_update)
+    df_parquets_historic = read_parquets_to_update(path_parquets_historics, lst_year_month_files_update,lst_columns)
     
-    df_final = update_parquets(df_parquets_historic, df_update)
+    df_final = update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_customer_clasification')
     
     # --- ESCRITURA DE LOS DATOS ACTUALIZADOS ---
-    group_parquet(df_final, path_parquets_historics)
+    group_parquet(df_final, path_parquets_historics,name='sales')
 
 if __name__ == "__main__":
     main()
