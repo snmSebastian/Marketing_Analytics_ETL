@@ -10,30 +10,26 @@ import os
 from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
 
 def obtain_new_products(df_master, df_consolidated):
+    a
 
 def main():
     #--------------------------------------------------
     #---------------- RUTAS ---------------------------
+    from config_paths import MasterProductsPaths
+    path_fill_rate_update=MasterProductsPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
+    path_sales_update=MasterProductsPaths.INPUT_RAW_UPDATE_SALES_DIR
+    path_demand_update=MasterProductsPaths.INPUT_RAW_UPDATE_DEMAND_DIR
+    path_country_code_file=MasterProductsPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
+    path_producst_hts=MasterProductsPaths.WORKFILE_HTS_FILE
+    path_producst_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
+    path_New_Products=MasterProductsPaths.WORKFILE_NEW_PRODUCTS_REVIEW_FILE    
+    path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
+    #path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE
     
-    # Archivos para obtener new products
-    path_fill_rate=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Fill Rate\Mothly_Update'
-    path_sales=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Mothly_Update'
-    path_demnad=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Demand\Mothly_Update\'Download_Demand.xlsx'
-
-    # Archivos con informacion de PWT-HTS
-    path_hts=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Products\Complete_Information_SKUs_PWT-HTS\Assing_Information_HTS.xlsx'
-    path_pwt=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Products\Complete_Information_SKUs_PWT-HTS\Assing_Information_PWT.xlsx'
-    
-    # Archivos para almacenar y actualizar los productos    
-    path_master_products=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Master_Products\Master_Product.xlsx'
-    path_New_Products=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Products\New_Product.xlsx'
-
-    
-
     # --- LECTURA DE ARCHIVOS DE CONFIGURACIÓN ---
-    df_fill_rate=read_files(path_fill_rate)
-    df_sales=read_files(path_sales)
-    df_demand=read_files(path_demnad)
+    df_fill_rate=read_files(path_fill_rate_update)
+    df_sales=read_files(path_sales_update)
+    df_demand=read_files(path_demand_update)
 
     df_master_products=pd.read_excel(path_master_products, dtype=str, engine='openpyxl')
     df_new_products=pd.read_excel(path_New_Products, dtype=str, engine='openpyxl')

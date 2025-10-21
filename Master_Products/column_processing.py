@@ -207,7 +207,7 @@ def corded_or_cordless_or_gas(sku,description,category_description,portfolio_des
     lst_cdl_description = [
         'CORDLESS', 'CDL', 'INALAMBRIC', 'BATTERY', 'BATT', 'BRUSHLESS', 'XR', 'MAX', 'LI-ION',
         '2.4V', '3.6V', '3.8V', '4V', '4.8V', '6V', '7.2V', '8V', '9.6V', '10.8V', 
-        '12V', '14.4V', '16V', '18V', '20V', '24V', '36V', '40V', '54V', '60V','120V',
+        '12V', '14.4V', '16V', '18V', '20V', '24V', '36V', '40V', '54V', '60V',
         'CHARGER', 'CARGADOR'
     ]
     lst_cdl_sku=['BDC','CMC','DWC','PCC','STC','DC']
@@ -229,10 +229,11 @@ def corded_or_cordless_or_gas(sku,description,category_description,portfolio_des
     if any(sku.startswith(elemento) for elemento in lst_crd_sku):
         return 'CORDED'
     # Prioridad 2: Verificar si la descripción contiene palabras clave de 'Cordless' o 'Corded'
-    if any(elemento in description for elemento in lst_cdl_description) and not '220V' in description:
-        return 'CORDLESS'
     if any(elemento in description for elemento in lst_crd_description):
         return 'CORDED'
+    if any(elemento in description for elemento in lst_cdl_description) and not '220V' in description:
+        return 'CORDLESS'
+    
     # Prioridad 3: Verificar si la categoría o portafolio contiene palabras clave de 'Cordless' o 'Corded'
     if any(elemento in category_portafolio for elemento in lst_cdl_cat_por_description):
         return 'CORDLESS'
@@ -266,10 +267,10 @@ def assing_qty_batteries(sku, description, batteries_qty):
     
     # Verifica si la descripción contiene alguna palabra clave relacionada con baterías
     if any(elemento in sku[-2:] for elemento in lst_battery_keywords):
-        return batteries_qty[-1]
+        return str(batteries_qty[-1])
     if sku.endswith('B'):
         # Si el SKU termina con 'B', significa que no tiene batería
-        return 0
+        return "0"
     return batteries_qty  # Retorna el valor original si no se encuentra información relevante
 
 def assing_voltaje(description, voltaje):
@@ -329,28 +330,52 @@ def assign_sub_brand(sku,description,brand):
     else:
         return "-"  # Retorna la marca original si no se encuentra una sub-marca específica
 
+def review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp):
+    # Creo  la columna de combinación única SBU+Category
+    df_master_products['SBU_Category'] = df_master_products['GPP SBU'].astype(str) + '-' + df_master_products['GPP Category Description'].astype(str)
+    # Contar la cantidad de combinaciones únicas (SBU + Category) por cada 'SKU Base'
+    df_sku_base_counts = df_master_products.groupby('SKU Base')['SBU_Category'].nunique().reset_index(name='count')
+    #Filtro aquellos sbu que tienen mas de un sbu-category
+    df_sku_base_review=df_sku_base_counts[df_sku_base_counts['count']>1]['SKU Base']
+    # Tomo toda la informacion existente para aquellos sbu que debemos revisar
+    df_resultado=df_master_products[df_master_products['SKU Base'].isin(df_sku_base_review)].copy()
+    # Asigno de donde viene el sku y su gpp
+    df_resultado.loc[:,'origen_sku'] = 'SKU Base con diferentes sbu-category'
+    df_resultado.loc[:,'¿como se asigno gpp?'] = 'Es el gpp que esta actualmente en el master product'
+    df_resultado.loc[:,'check_sku']="-"
+    
+    # tomo las columnas que debemos revisar
+    df_resultado=df_resultado[lst_colums_gpp]  
+    return df_resultado 
+
 def main():
+    print("=" * 55)
+    print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
+    print("=" * 55)
     #-------------------------------
     #---- RUTAS DE LOS ARCHIVOS
     #-------------------------------
+    from config_paths import MasterProductsPaths
+    path_fill_rate_update=MasterProductsPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
+    path_sales_update=MasterProductsPaths.INPUT_RAW_UPDATE_SALES_DIR
+    path_demand_update=MasterProductsPaths.INPUT_RAW_UPDATE_DEMAND_DIR
     
-    # Archivos para obtener new products
-    path_fill_rate=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Fill Rate\Mothly_Update'
-    path_sales=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Mothly_Update'
-    path_demand=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Demand\Mothly_Update'
+    path_producst_hts=MasterProductsPaths.WORKFILE_HTS_FILE
+    path_producst_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
     
-    # Archivos para almacenar y actualizar los productos    
-    path_master_products=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Master_Products\Master_Product-prueba.xlsx'
-    path_New_Products=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Products\Sku_for_Review_prueba.xlsx'
-    path_gpp=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Master_Products\GPP-Brand.xlsx'
-    path_psd=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Products\sku_shared_of_PSD.xlsx'
-
+    path_New_Products=MasterProductsPaths.WORKFILE_NEW_PRODUCTS_REVIEW_FILE    
+    path_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
+    path_psd=MasterProductsPaths.INPUT_RAW_SHARED_PSD_FILE
+   
+    #path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
+    path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE
+    
     #-----------------------------
     #----  Cargo dataframes
     #-----------------------------
-    df_fill_rate=read_files(path_fill_rate)
-    df_sales=read_files(path_sales)
-    df_demand=read_files(path_demand)
+    df_fill_rate=read_files(path_fill_rate_update)
+    df_sales=read_files(path_sales_update)
+    df_demand=read_files(path_demand_update)
 
     df_master_products=pd.read_excel(path_master_products, dtype=str, engine='openpyxl')
     df_new_products=pd.read_excel(path_New_Products, dtype=str, engine='openpyxl')
@@ -461,17 +486,16 @@ def main():
         columns_merge
     )
     # Asigno ¿como se asigno gpp? a los dataframes
-    df_new_products_con_base['como se asigno gpp'] = 'sku base'
-    df_new_products_sin_base['como se asigno gpp'] = 'por portafolio dado por SAP'
-    df_posibble_psd['como se asigno gpp'] = 'sku esta en la base compartida por PSD'
-
+    df_new_products_con_base['¿como se asigno gpp?'] = 'sku base'
+    df_new_products_sin_base['¿como se asigno gpp?'] = 'por portafolio dado por SAP'
+    df_posibble_psd['¿como se asigno gpp?'] = 'sku esta en la base compartida por PSD'
     # Ordeno las columnas de los dataframes
     lst_colums_gpp=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP', 'GPP SBU',
     'GPP SBU Description', 'SBU Type', 'GPP Division Code',
     'GPP Division Description', 'GPP Category Code',
     'GPP Category Description', 'GPP Portfolio Code',
     'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-    'Voltaje', 'Bare', 'Sub-Brand','origen_sku','check_sku','¿como se asigno gpp?']
+    'Voltaje', 'Bare', 'Sub-Brand','origen_sku','¿como se asigno gpp?','check_sku']
     df_new_products_con_base = df_new_products_con_base[lst_colums_gpp]
     df_new_products_sin_base = df_new_products_sin_base[lst_colums_gpp]
     df_posibble_psd = df_posibble_psd[lst_colums_gpp]
@@ -504,8 +528,15 @@ def main():
     df_new_products_gpp['Sub-Brand'] = df_new_products_gpp.apply(
         lambda row: assign_sub_brand(row['SKU'], row['SKU Description'], row['Brand']), axis=1)
 
+    # Extraigo los sku base que tienen diferente sbu-category para su revision
+    df_sku_base_review=review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp)
+    
+    # Creo el dataframe que contiene tanto los nuevos sku como los sku a revisar
+    df_review_products=pd.concat([df_new_products_gpp,df_sku_base_review], ignore_index=True)
+    
+
     # Exporto a excel el dataframe de nuevos productos
-    df_new_products_gpp.to_excel(path_New_Products, index=False)
+    df_review_products.to_excel(path_New_Products, index=False)
 
 if __name__ == "__main__":
     main()

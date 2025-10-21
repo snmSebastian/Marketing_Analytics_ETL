@@ -193,26 +193,29 @@ def notation_customers(df_update, df_notation_customers):
     return df_update
 
 def main():
+    print("=" * 55)
+    print("--- 🔄 INICIANDO PROCESO: MD CUSTOMERS UPDATE ETL ---")
+    print("=" * 55)
     #--------------------------------------------------
     #---------------- RUTAS ---------------------------
-    path_country=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Shared_Information_for_Projects\Country\Region_Country_codes.xlsx'
-    path_customer_shared=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Customers\Clasifications_Customers.xlsx'
-    path_customers=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Master_Customers\Master_Customers.xlsx'
-    path_notaton_customers=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Customers\Notation_Name_Customers.xlsx'
-   
-    path_fill_rate=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Fill Rate\Mothly_Update'
-    path_sales=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Mothly_Update'
-    path_prueba=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Master_Customers\prueba.xlsx'
-
+    from config_paths import MasterCustomersPaths
+    country_code_file=MasterCustomersPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
+    customers_shared=MasterCustomersPaths.INPUT_RAW_Customers_Shared_by_Country_FILE
+    md_customers=MasterCustomersPaths.OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE_PRUEBA
+    notation_customers_file=MasterCustomersPaths.INPUT_RAW_NOTATION_NAMES_FILE
+    
+    fill_rate_update=MasterCustomersPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
+    sales_update=MasterCustomersPaths.INPUT_RAW_UPDATE_SALES_DIR
+    
     # --- LECTURA DE ARCHIVOS DE CONFIGURACIÓN ---
-    df_customers_shared = pd.read_excel(path_customer_shared,sheet_name='Customers_Shared_by_Country', dtype=str, engine='openpyxl')
-    df_customers_clasifications = pd.read_excel(path_customer_shared,sheet_name='Clasifications', dtype=str, engine='openpyxl')
-    df_country = pd.read_excel(path_country,
+    df_customers_shared = pd.read_excel(customers_shared,sheet_name='Customers_Shared_by_Country', dtype=str, engine='openpyxl')
+    df_customers_clasifications = pd.read_excel(customers_shared,sheet_name='Clasifications', dtype=str, engine='openpyxl')
+    df_country = pd.read_excel(country_code_file,
                                    sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
-    df_notation_customers=pd.read_excel(path_notaton_customers, dtype=str, engine='openpyxl')
-    df_fill_rate=read_files(path_fill_rate)
-    df_sales=read_files(path_sales)
-    df_master=pd.read_excel(path_customers, dtype=str, engine='openpyxl')
+    df_notation_customers=pd.read_excel(notation_customers_file, dtype=str, engine='openpyxl')
+    df_fill_rate=read_files(fill_rate_update)
+    df_sales=read_files(sales_update)
+    df_master=pd.read_excel(md_customers, dtype=str, engine='openpyxl')
 
     # --- LECTURA Y CONSOLIDACIÓN DE DATOS DE ACTUALIZACIÓN --
     lst_columns=['Country Code', 'Destination Country','Sold-To Customer Code','Sold-To Customer','Sold-To Dist Channel']
@@ -228,7 +231,7 @@ def main():
                                  df_consolidated,
                                  name='master_customers')
     df_update=notation_customers(df_update,df_notation_customers)
-    df_update.to_excel(path_prueba, index=False)
+    df_update.to_excel(md_customers, index=False)
 if __name__ == "__main__":
     main()
-    print("Proceso de actualización de clientes completado exitosamente.")
+    print("Proceso de actualización de clientes completado exitosamente ✅.")

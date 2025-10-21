@@ -15,14 +15,14 @@ def read_parquets_to_update(path_parquets_historics, lst_year_month_files_update
         pattern = os.path.join(path_parquets_historics, f"*{year_month}*.parquet")
         found_files = glob.glob(pattern)
         if not found_files:
-            print(f"Advertencia: No se encontró archivo parquet para el periodo {year_month} en '{path_parquets_historics}'")
+            print(f"Advertencia: No se encontró archivo parquet para el periodo {year_month} en '{path_parquets_historics}'\n")
         lst_files.extend(found_files)
     
     if not lst_files:
         print("No se encontraron archivos parquet para actualizar.")
         return pd.DataFrame(columns=lst_columns)
         
-    print(f"Archivos parquet a actualizar encontrados: {len(lst_files)}")
+    print(f"Archivos parquet a actualizar encontrados: {len(lst_files)}\n")
 
     
     return pd.concat([pd.read_parquet(file) for file in lst_files], ignore_index=True)
@@ -49,14 +49,20 @@ def update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_c
     return df_final
 
 def main():
-    # --- CONFIGURACIÓN DE RUTAS ---
-    path_parquets_historics = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Fill_Rate\prueba'
-    path_files_updates = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Fill Rate\Mothly_Update'
-    path_country_codes = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Shared_Information_for_Projects\Country\Region_Country_codes.xlsx'
-    output_path =r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Fill_Rate\prueba'
-
+    print("=" * 55)
+    print("--- 🔄 INICIANDO PROCESO: FILL RATE UPDATE ETL ---")
+    print("=" * 55)
+    
+    # --- IMPORTAMOS ARCHIVOS ---
+    from config_paths import FillRatePaths
+    fill_rate_historic_processed_dir = FillRatePaths.OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA #  PRUEBA
+    #fill_rate_historic_processed_dir = FillRatePaths.OUTPUT_PROCESSED_PARQUETS_DIR
+    
+    fill_rate_update_raw_dir = FillRatePaths.INPUT_RAW_UPDATE_DIR
+    country_code_file = FillRatePaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
+    
     # --- PROCESAMIENTO DE ARCHIVOS DE ACTUALIZACIÓN ---
-    df_country = pd.read_excel(path_country_codes, sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+    df_country = pd.read_excel(country_code_file, sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
     for col in df_country.columns:
         df_country[col] = df_country[col].astype(str).str.upper().str.strip()
 
@@ -65,30 +71,24 @@ def main():
                    'Fill Rate First Pass Order Qty', 'Fill Rate First Pass Invoice Qty',
                    'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
 
-    df_update = read_files(path_files_updates)
-    #print('read_files')
-    #print(df_update.head())
+    df_update = read_files(fill_rate_update_raw_dir)
     if df_update is None or df_update.empty:
         print("No hay archivos para actualizar. Finalizando proceso.")
         return
 
     df_update = asign_country_code(df_update, df_country)
-    #print('asign_country_code')
-    #print(df_update.head())
-    
     df_update = process_columns(df_update, lst_columns)
-    #print('process_columns')
-    #print(df_update.head())
     
     # --- LECTURA Y ACTUALIZACIÓN DE DATOS HISTÓRICOS ---
     lst_year_month_files_update = df_update['fk_year_month'].unique().tolist()
     
-    df_parquets_historic = read_parquets_to_update(path_parquets_historics, lst_year_month_files_update,lst_columns)
+    df_parquets_historic = read_parquets_to_update(fill_rate_historic_processed_dir, lst_year_month_files_update,lst_columns)
     
     df_final = update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_customer_clasification')
     
     # --- ESCRITURA DE LOS DATOS ACTUALIZADOS ---
-    group_parquet(df_final, output_path,name='fill_rate')
+    group_parquet(df_final, fill_rate_historic_processed_dir,name='fill_rate')
 
 if __name__ == "__main__":
     main()
+    print("Fill Rate ETL Update completed successfully. ✅.")

@@ -18,15 +18,20 @@ import os
 from Fill_Rate.Process_ETL.Process_Files import read_files, asign_country_code, process_columns, group_parquet
 
 def main():
-    # La función realiza la escritura de archivos pero no devuelve ningún valor,
-    # por lo que la llamamos directamente.
-    input_path = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Historic'
-    output_path=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Sales'
-    path_country=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Shared_Information_for_Projects\Country\Region_Country_codes.xlsx'
+    # Importamos las rutas
+    from config_paths import SalesPaths
+    sales_historic_raw_dir = SalesPaths.INPUT_RAW_HISTORIC_DIR
+    country_code_file = SalesPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
+    processed_parquet_dir = SalesPaths.OUTPUT_PROCESSED_PARQUETS_DIR
+
+    #input_path = r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Historic'
+    #output_path=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Sales'
+    #path_country=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Shared_Information_for_Projects\Country\Region_Country_codes.xlsx'
+    
     # Leer los archivos de datos históricos y consolidarlos en un DataFrame.
-    df_consolidated = read_files(input_path)
+    df_consolidated = read_files(sales_historic_raw_dir)
     # Leer el archivo de códigos de país.
-    df_country = pd.read_excel(path_country,
+    df_country = pd.read_excel(country_code_file,
                                sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
     # Definir las columnas relevantes para el procesamiento.    
     lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code', 'fk_SKU',
@@ -34,10 +39,11 @@ def main():
                    'Total Sales', 'Total Cost', 'Units Sold']
     df_consolidated = asign_country_code(df_consolidated, df_country)
     df_processed=process_columns(df_consolidated,lst_columns)
-    group_parquet(df_processed, output_path,name='sales')
+    group_parquet(df_processed, processed_parquet_dir,name='sales')
 
 
 # --- EJECUCION DEL SCRIPT ---
 # Es una buena práctica envolver la ejecución principal en un bloque if __name__ == "__main__":
 if __name__ == "__main__":
     main()
+    print("Processing of historical Sales data completed successfully. ✅.")
