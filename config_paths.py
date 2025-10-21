@@ -90,7 +90,7 @@ PATHS_CONFIG = {
         "Processed": {
             "GPP_Brand": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'GPP-Brand.xlsx',
             "Master_Product": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'Master_Product.xlsx',
-            "Master_Product_Prueba": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'Master_Product_Prueba.xlsx',
+            "Master_Product_Prueba": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'Master_Product _Prueba.xlsx',
             
         }
     },
