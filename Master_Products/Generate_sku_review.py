@@ -19,7 +19,7 @@ from Master_Products.column_processing import (obtain_new_products, assign_sku_b
 
 def main():
     print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
+    print("--- 🔄 INICIANDO PROCESO: PRODUCTS REVIEW UPDATE ETL ---")
     print("=" * 55)
     #-------------------------------
     #---- RUTAS DE LOS ARCHIVOS

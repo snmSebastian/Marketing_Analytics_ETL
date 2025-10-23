@@ -79,17 +79,127 @@ def update_master_products(path_md_product, path_sku_review):
     df_master_products_final = df_master_products_final[lst_col_md_product]
     
     return df_master_products_final
+
+
+def update_hts_pwt(df_md_product,df_hts_or_pwt,lst_columns_hts_or_pwt):
+    df_hts_or_pwt=df_hts_or_pwt.set_index('SKU').copy()
+    df_md_product=df_md_product.set_index('SKU').copy()
+    df_md_product.update(df_hts_or_pwt[lst_columns_hts_or_pwt])
+    df_md_product=df_md_product.reset_index()
+    return df_md_product
+
+def assign_brand(row, dic_brand_standardization):
+    for key, values in dic_brand_standardization.items():
+        if any(value in row['Brand'] for value in values):
+            return key
+
+
+
 def main():
     print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL (OPTIMIZED) ---")
+    print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
     print("=" * 55)
     from config_paths import MasterProductsPaths
     path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
     path_sku_review = MasterProductsPaths.WORKFILE_NEW_PRODUCTS_REVIEW_FILE
+    path_hts=MasterProductsPaths.WORKFILE_HTS_FILE
+    path_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
+    path_brand=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
+    path_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
+
+    df_hts=pd.read_excel(path_hts, dtype=str, engine='openpyxl')
+    df_pwt=pd.read_excel(path_pwt, dtype=str, engine='openpyxl')
+    df_brand=pd.read_excel(path_brand,sheet_name='Brand', dtype=str, engine='openpyxl')
+    df_gpp=pd.read_excel(path_gpp,sheet_name='GPP', dtype=str, engine='openpyxl')
+
+    # creo un df agregando los nuevos sku
+    df_with_new_products = update_master_products(path_md_product, path_sku_review)
     
-    df_master_products_final = update_master_products(path_md_product, path_sku_review)
-    df_master_products_final.to_excel(path_md_product, index=False)
+    #----------------------------------------
+    # --- AGREGO INFO DE HTS - PWT
+    #-------------------------------------
     
+    lst_columns_hts=['Big Rock',
+       'Top Category', 'NPI Project', 'Categoria HTS', 'Familia HTS',
+       'Sub Familia HTS', 'Clase HTS', 'NPI Project HTS',
+       'Posicionamiento HTS']
+    df_with_new_products_and_hts=update_hts_pwt(df_with_new_products,df_hts,lst_columns_hts)
+    
+    lst_columns_pwt=['Group 1','Group 2']
+    df_with_new_products_hts_and_pwt=update_hts_pwt(df_with_new_products_and_hts,df_pwt,lst_columns_pwt)
+
+    #--------------------------------------------
+    # --- TRATAMIENTO DE BRAND - BRAND GROUP 
+    #--------------------------------------------
+    
+    # Diccionario notacion marca
+    Brand_Standardization_Map = {
+    "BLACK + DECKER": ["B+D", "BLACK&DECKER", "BLACKANDDECKER", "BLACK+DECKER®", "BLACK + DECKER"],
+    "DEWALT": ["DEWALT®", "DWLT", "DEWALT"],
+    "STANLEY": ["STANLEY®", "STANLEYTOOLS", "STANLEY"],
+    "CRAFTSMAN": ["CRAFTSMAN", "CRAFTSMN", "CRAFTSMAN®"],
+    
+    "PORTER CABLE": ["PORTERCABLE", "PORTER-CABLE", "PCABLE"],
+    "FATMAX": ["FATMAX","FATMAXX", "FAT MAX"],
+    "IRWIN": ["IRWIN", "IRWININDUSTRIAL"],
+    "PROTO": ["PROTO", "PROTOTOOLS","PROTOTOOL","PROTOTOO"],
+    "FACOM": ["FACOM", "FACOMS.A.",'FACOMS','FACON','FACONS'],
+    "BOSTITCH": ["BOSTITCH","BOSTICH","BOSTICH","BOSTICTH", "BOSTITCHSTANLEY"],
+    "IAR EXPERT": ["IAR EXPERT", "IAREXPERT"],
+    "LENOX": ["LENOX", "LENOXTOOLS","LNX"],
+    
+    "GRIDEST": ["GRIDEST", "GRYDEST"],
+    "DEWALT POWERS": ["DEWALTPOWERS", "DWLTPOWERS", "DEWALTPOWER"],
+    "TROY-BILT": ["TROYBILT", "TROY-BILT"],
+    "YARD MACHINES": ["YARDMACHINES", "YARDMACH"],
+    "GENUINE FACTORY PAR": ["GENUINEFACTORYPART", "GENUINEFACTORY", "GFPARTS"],
+    
+    "OTHER": ["OTHERS", "OTHERBRAND", "OTRA","OTH", "OTHER"],
+    "SAT (SSS)": ["SAT", "SSS", "SATSSS"],
+    "CUB CADET": ["CUB CADET", "CUBCADET"],
+    "DELTA": ["DELTA", "DELTAPOWER"],
+    "BIESEMEYER": ["BIESEMEYER"],
+    "TRIMMER PLUS": ["TRIMMERPLUS", "TRIMMER+"],
+    "SIDCHROME": ["SIDCHROME", "SIDCHROMETOOLS", "SIDCHROME"]
+   }
+    # crea diccionario invertido
+    brand_map_inverse={}
+    for standard_brand, variations in Brand_Standardization_Map.items():
+        # Normalizar la marca estándar para que coincida con la columna df_final['Brand']
+        standard_key_normalized = standard_brand.replace(' ', '').upper()
+        
+        # Llenar el diccionario inverso: {VARIACIÓN_NORMALIZADA: MARCA_ESTÁNDAR_NORMALIZADA}
+        for variation in variations:
+            # Normalizar las variaciones (errores) también
+            variation_normalized = variation.replace(' ', '').upper()
+            brand_map_inverse[variation_normalized] = standard_key_normalized
+
+    df_final=df_with_new_products_hts_and_pwt.copy()
+    df_final['Brand_Clean']=df_final["Brand"].str.upper().str.strip().str.replace(' ', '')
+    df_final['Brand'] = df_final['Brand_Clean'].map(brand_map_inverse).fillna(df_final['Brand'])
+    df_final = df_final.drop(columns=['Brand_Clean'])
+
+    # ASIGNACION DE BRAND GROUP
+    df_brand=df_brand[['Brand', 'Brand Group']].set_index('Brand').copy()
+    df_final=df_final.set_index('Brand').copy()
+    df_final.update(df_brand)
+    df_final=df_final.reset_index()
+
+    df_final['Brand + SBU']=df_final['Brand']+' - '+df_final['GPP SBU']  
+    
+    #----------------------------------------------------
+    # --- CATEGORY GROUP-BIG ROCK  -TOP CATEGORY
+    #----------------------------------------------------
+    
+    df_gpp=df_gpp[['GPP','Category Group','Big Rock','Top Category']].set_index('GPP').copy()
+    df_final=df_final.set_index('GPP').copy()
+    df_final.update(df_gpp)
+
+    df_final.to_excel(path_md_product, index=False)
+
+
+# Ejemplo de cómo usarlo para la limpieza:
+# df['Brand_Clean'] = df['Brand'].replace(brand_standardization_map, regex=True)
 if __name__ == "__main__":
     main()
     print("Proceso de actualización de productos completado exitosamente.")
