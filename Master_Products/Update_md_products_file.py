@@ -1,3 +1,11 @@
+"""
+Módulo de Carga y Actualización Final del Maestro de Productos.
+Este script realiza el proceso de Upsert (Update/Insert) en el archivo
+Master Products. Primero, consolida y aplica los cambios verificados
+del archivo de revisión. Luego, enriquece y normaliza los datos con
+información de Brand Group, Category Group y las clasificaciones HTS/PWT.
+"""
+
 # ---------------- LIBRERIAS -----------------------
 # --------------------------------------------------
 import pandas as pd
@@ -32,7 +40,15 @@ BRAND_STANDARD_MAP = {
 }
 
 def create_inverse_brand_map(standard_map):
-    """Crea el diccionario inverso y normalizado para mapeo rápido con Pandas."""
+    """"
+    Genera un diccionario de mapeo inverso y normalizado a partir de un mapa estándar de marcas. Esto facilita el
+    proceso de estandarización de marcas, permitiendo una búsqueda rápida y vectorizada de las variaciones de marca a su
+    nombre estándar (ej., 'BLACK&DECKER' -> 'BLACK + DECKER').
+    
+    Args: standard_map (dict): Diccionario de marcas estándar con listas de variaciones
+
+    Returns: dict: Diccionario con variaciones normalizadas (clave) y marcas estándar (valor).
+    """
     inverse_map = {}
     for standard_brand, variations in standard_map.items():
         # Normaliza la clave estándar (la marca final)
@@ -45,7 +61,17 @@ def create_inverse_brand_map(standard_map):
     return inverse_map
 
 def fill_missing_columns(df: pd.DataFrame, target_columns: list, fill_value: str = '-') -> pd.DataFrame:
-    """Añade columnas faltantes al DataFrame y las rellena con el valor especificado."""
+    """
+    Función utilitaria que asegura que un DataFrame (generalmente el de nuevos registros) contenga todas las columnas de la
+    estructura final esperada. Las columnas faltantes son creadas e inicializadas con un valor por defecto ('-').
+
+    Args:
+        df (pd.DataFrame): DataFrame objetivo.
+        target_columns (list): Lista de columnas deseadas.
+        fill_value (str): Valor para rellenar las nuevas columnas.
+
+    Returns: pd.DataFrame: DataFrame con las columnas completadas y ordenadas.
+    """
     cols_to_create = [col for col in target_columns if col not in df.columns]
     if cols_to_create:
         for col in cols_to_create:
@@ -55,7 +81,20 @@ def fill_missing_columns(df: pd.DataFrame, target_columns: list, fill_value: str
 
 
 def update_master_products(path_md_product, path_sku_review, lst_col_md_product, lst_colums_gpp, col_key='SKU'):
-    """Carga, actualiza SKUs existentes y agrega SKUs nuevos al Maestro."""
+    """
+    Implementa la lógica de Upsert (Update/Insert) en el Maestro de Productos. Filtra el archivo de revisión por SKUs marcados
+    como 'verified' u 'ok', y luego:
+        1) Actualiza in place los registros existentes con los nuevos datos de clasificación GPP.
+        2) Concatena los registros nuevos, asegurando la estructura de columnas completa.
+    
+    Args:
+        path_md_product (str): Ruta al Maestro de Productos actual.
+        path_sku_review (str): Ruta al archivo de revisión con los SKUs ya clasificados.
+        lst_col_md_product (list): Columnas finales esperadas del Maestro.
+        lst_colums_gpp (list): Columnas de clasificación a actualizar/insertar.
+        col_key (str): Columna clave ('SKU') para el Upsert.
+    Returns: pd.DataFrame: El Maestro de Productos actualizado con registros modificados y nuevos.
+    """
     
     # --- LECTURA Y PREPROCESAMIENTO ---
     df_md_product = pd.read_excel(path_md_product, dtype=str, engine='openpyxl')
@@ -94,7 +133,19 @@ def update_master_products(path_md_product, path_sku_review, lst_col_md_product,
 
 
 def update_master_data(df_final: pd.DataFrame, df_source: pd.DataFrame, join_key: str, update_columns: list) -> pd.DataFrame:
-    """Función genérica para actualizar columnas de df_final usando df_source por una clave."""
+    """
+    Función utilitaria genérica que realiza una actualización basada en el índice (df.update()).
+    Utiliza una columna clave (join_key) para alinear df_final con df_source y sobrescribe los valores de las
+    update_columns en el destino con los valores del origen.
+    
+    Args:
+        df_final (pd.DataFrame): El DataFrame que recibirá la actualización.
+        df_source (pd.DataFrame): El DataFrame fuente con los datos a usar.
+        join_key (str): Columna clave para indexar la actualización.
+        update_columns (list): Lista de columnas a actualizar.
+    
+    Returns: pd.DataFrame: El DataFrame destino con los valores actualizados.
+    """
     
     # Solo seleccionamos las columnas necesarias del DF de origen
     df_source_update = df_source[[join_key] + update_columns].set_index(join_key)
@@ -106,6 +157,16 @@ def update_master_data(df_final: pd.DataFrame, df_source: pd.DataFrame, join_key
 
 
 def main():
+    """	
+    Orquesta el proceso completo de Carga (L) y Consolidación del Maestro de Productos.	
+    El flujo incluye:
+        1) Ejecución del Upsert de SKUs base.
+        2) Incorporación de datos HTS y PWT validados.	
+        3) Estandarización de la columna Brand.
+        4) Look-up final de Brand Group y Category Group (vía GPP).	
+        5) Exportación del Maestro de Productos finalizado.	
+    Returns: None: La función orquesta el proceso y sobrescribe el archivo Maestro de Productos final.
+    """
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
     print("=" * 55)

@@ -1,4 +1,11 @@
-'''Contiene las siguientes funciones:
+'''
+Módulo de procesamiento principal para datos de Fill Rate.
+Este script implementa el flujo ETL (Extracción, Transformación y Carga)
+para consolidar archivos históricos de Fill Rate, asignar códigos de país,
+realizar transformaciones clave y guardar los datos limpios en formato Parquet
+particionado por año-mes.
+
+Contiene las siguientes funciones:
 - read_files: Lee archivos Excel de un directorio y los consolida en un DataFrame   
 - asign_country_code: Asigna el código de país a cada fila del DataFrame df usando el DataFrame country como referencia.
 - process_columns: Procesa las columnas relevantes del DataFrame df y las convierte a mayúsculas.
@@ -15,12 +22,19 @@ import pandas as pd
 import glob
 import os
 
-
+# Lectura de archivos
 def read_files(input_path):
     """
     Lee archivos Excel de un directorio, los consolida en un dataframe
-    """
-
+    
+    Args:
+        input_path (str): Ruta del directorio donde se encuentran los archivos Excel (.xlsx) a consolidar.
+    
+    Returns:
+        pd.DataFrame or None: DataFrame consolidado con todos los datos de los archivos, o None si no se encuentran
+        archivos o la lectura falla sin consolidar nada.
+     """
+    
     # --- LECTURA Y CONSOLIDACION DE ARCHIVOS ---
     # Buscar todos los archivos .xlsx en el directorio de entrada.
     all_files_xlsx = glob.glob(os.path.join(input_path, "*.xlsx"))
@@ -55,10 +69,21 @@ def read_files(input_path):
 
     return df_consolidated
 
+# Asignacion pais
 def asign_country_code(df_consolidated, df_country):
         """
         Asigna el código de país a cada fila del DataFrame df
         usando el DataFrame country como referencia.
+
+        Args:
+            df_consolidated (pd.DataFrame): DataFrame principal con los datos de Fill Rate.
+                                            Debe contener las columnas 'Country Code' y 'Destination Country'.
+            df_country (pd.DataFrame): DataFrame de referencia para el mapeo de países.
+                                       Debe contener 'Country Code Concat' y 'Country'.
+
+        Returns:
+            pd.DataFrame: El DataFrame df_consolidated original, modificado con las nuevas columnas 'code concat country'
+                          y 'fk_Country'.    
         """
         # Crear una columna 'code concat country' que concatena 'Country Code' y 'Destination Country'
         df_consolidated['code concat country'] = df_consolidated['Country Code'].astype(str) + df_consolidated['Destination Country'].astype(str)
@@ -74,10 +99,14 @@ def asign_country_code(df_consolidated, df_country):
         return df_consolidated
     
 def process_columns(df_consolidated,lst_columns):
-    ""    
-    """
-            Escoje las columnas relevantes del DataFrame df y las procesa
-            para asegurar que todas las columnas estén en mayúsculas y sin espacios.
+    """    
+        Renombra, calcula columnas clave ('fk_year_month', 'clasification', 'fk_date_country_customer_clasification',
+        'fk_Date'), y selecciona el subconjunto final de columnas para el DataFrame procesado.
+    Args:
+        df_consolidated (pd.DataFrame): DataFrame consolidado que contiene todas las columnas sin procesar.
+        lst_columns (list): Lista de strings con los nombres de las columnas finales deseadas, incluyendo las recién creadas (e.g., 'fk_Date', 'fk_Country').
+    Returns:
+        pd.DataFrame: DataFrame final, filtrado por lst_columns, listo para ser guardado.
     """
     try:
         
@@ -120,11 +149,9 @@ def process_columns(df_consolidated,lst_columns):
                                                   format='%Y-%m',
                                                   errors='coerce')
        
-        #cambio
         df_processed = df_consolidated[lst_columns].copy()                                                                                                                                                                           
         # Convertir todas las columnas a mayúsculas y eliminar espacios
         for col in df_processed.columns:        
-       #camabio
             df_processed.loc[:,col] = df_consolidated[col].astype(str).str.upper().str.strip()    
        
     except KeyError as e:
@@ -132,7 +159,15 @@ def process_columns(df_consolidated,lst_columns):
     return df_processed
 
 def group_parquet(df_processed, output_path,name='fill_rate'):
-    """ Guarda un dataframe consolidado en archivos Parquet segmentados por año-mes. """
+    """ Guarda un dataframe consolidado en archivos Parquet segmentados por año-mes.
+    Args:
+        df_processed (pd.DataFrame): DataFrame ya limpio y procesado. Debe contener la columna 'fk_year_month'.
+        output_path (str): Ruta del directorio donde se guardarán los archivos Parquet particionados.
+        name (str, optional): Prefijo para los nombres de los archivos Parquet generados. Por defecto es 'fill_rate'. 
+
+    Returns:
+        None: La función no devuelve un valor, sino que guarda los archivos en el disco.
+    """
     # --- ESCRITURA DE ARCHIVOS PARQUET SEGMENTADOS ---
     # Agrupar el DataFrame por 'year_month' y guardar cada grupo en un archivo Parquet.
     for period, group in df_processed.groupby('fk_year_month'):
@@ -145,6 +180,13 @@ def group_parquet(df_processed, output_path,name='fill_rate'):
         #print("\nProceso completado. Archivos Parquet generados exitosamente.")
 
 def main():
+    """
+    Función principal que orquesta el flujo ETL completo para los datos de Fill Rate.
+    Lee las rutas de configuración, ejecuta la lectura, el mapeo de países,
+    el procesamiento de columnas y la segmentación en archivos Parquet.
+
+    Returns: None: La función orquesta el proceso completo y no devuelve un valor.
+    """
     # importamos las rutas de archivos
     from config_paths import FillRatePaths
     fil_rate_historic_raw_dir = FillRatePaths.INPUT_RAW_HISTORIC_DIR

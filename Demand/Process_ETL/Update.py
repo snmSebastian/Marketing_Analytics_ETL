@@ -1,3 +1,11 @@
+"""
+Módulo de orquestación para el proceso de Actualización Incremental (Upsert) de los datos de Demanda (Demand).
+Este script construye el pipeline de actualización combinando:
+1. Funciones de Lectura/Carga genéricas del módulo Fill_Rate.
+2. Lógica de Mapeo y Transformación específica de Demanda (asign_country_code, process_columns) definida localmente.
+Esto garantiza una actualización eficiente y adaptada a la estructura de datos de Demand."""
+
+
 # Librerias
 import pandas as pd
 import glob
@@ -9,6 +17,14 @@ from Fill_Rate.Process_ETL.Update import read_parquets_to_update,update_parquets
 from Demand.Process_ETL.Process_Files import asign_country_code, process_columns
 
 def main():
+    """
+    Orquesta el flujo de actualización incremental para los datos de Demanda.
+        1. Procesa los archivos brutos de la actualización utilizando la lógica de transformación de Demand.
+        2. Determina los periodos afectados.
+        3. Aplica el Upsert utilizando la clave única 'fk_date_country_clasification'.
+        4. Guarda los archivos Parquet actualizados, sobrescribiendo los periodos históricos.
+    Returns: None: La función orquesta el proceso y no devuelve un valor.
+    """
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: DEMAND UPDATE ETL ---")
     print("=" * 55)

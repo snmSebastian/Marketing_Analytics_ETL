@@ -1,3 +1,11 @@
+"""
+Módulo de Orquestación y Ejecución para la generación del Archivo de Revisión de Productos.
+Este script centraliza el flujo ETL (llamando a las funciones de column_processing.py)
+para identificar nuevos SKUs, asignar clasificaciones GPP, atributos (Corded/Cordless, Voltaje),
+y generar un archivo de trabajo (WORKFILE_NEW_PRODUCTS_REVIEW_FILE) que requiere
+la validación manual del analista.
+"""
+
 #---------------- LIBRERIAS -----------------------
 #--------------------------------------------------
 # Liberia
@@ -10,6 +18,9 @@ import os
 import pandas as pd
 from typing import List, Union
 
+# Importación de Funciones de Transformación y Reutilización
+# Se importan las funciones de procesamiento de datos compartidas (read_files)
+# y la lógica de clasificación de productos (Master_Products/column_processing).
 from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
 from Master_Products.column_processing import (obtain_new_products, assign_sku_base, assign_info_by_key,
                               assign_gpp_by_portafolio, verify_psd, verify_gpp,
@@ -18,6 +29,14 @@ from Master_Products.column_processing import (obtain_new_products, assign_sku_b
 
 
 def main():
+    """	
+    Orquesta el pipeline completo para identificar, clasificar y generar la lista de SKUs a revisar.	
+        1. Carga los datos de actualización y los maestros de referencia.	
+        2. Llama a las funciones de procesamiento para asignar SKU Base, clasificaciones GPP y atributos.	
+        3. Identifica SKUs Base inconsistentes del maestro histórico.	
+        4. Consolida y exporta el resultado final (nuevos SKUs + SKUs inconsistentes) al archivo de trabajo Excel.	
+    Returns: None: La función orquesta el proceso y guarda el resultado en un archivo Excel (Workfile).
+    """
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: PRODUCTS REVIEW UPDATE ETL ---")
     print("=" * 55)

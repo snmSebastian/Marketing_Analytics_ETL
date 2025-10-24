@@ -1,7 +1,29 @@
+"""
+Módulo de orquestación y validación para la clasificación PWT (Power Tools o similar).
+Este script revisa el Maestro de Productos ('md_product') filtrando solo los SKUs de la
+unidad de negocio PWT y valida si sus atributos de clasificación específicos ('Group 1', 'Group 2')
+están completos, utilizando un archivo de trabajo ('df_pwt') como referencia.
+Genera el archivo de trabajo PWT para la revisión manual.
+"""
 import pandas as pd
 import numpy as np
 
 def update_file_pwt(md_product,lst_columns_pwt,df_pwt):
+    """
+    Filtra el Maestro de Productos por la SBU 'PWT' y realiza una validación de calidad sobre sus columnas de clasificación
+    (Group 1, Group 2). Clasifica cada SKU en base a dos estados:
+        1) 'New sku' (no existe en el archivo PWT de referencia).
+        2) 'SKU Existente - Revisión' (existe, pero sus campos clave Group 1 y/o Group 2 contienen datos faltantes o por defecto,
+           indicados por el separador '-').
+
+    Args:
+        md_product (pd.DataFrame): El DataFrame del Maestro de Productos principal.
+        lst_columns_pwt (list): Lista de columnas PWT y de clasificación necesarias.
+        df_pwt (pd.DataFrame): El DataFrame de referencia de PWT (archivo de trabajo).
+
+    Returns: pd.DataFrame: DataFrame listo para exportar que contiene solo los SKUs PWT, incluyendo la columna 'check_sku' con el estado de
+             verificación y la necesidad de revisión.
+    """
     df_filter_pwt=md_product[md_product['GPP SBU']=='PWT'][lst_columns_pwt].copy()
     mask_sku_md=df_filter_pwt['SKU'].isin(df_pwt['SKU'])
     df_filter_pwt['check_sku']=np.where(
@@ -23,6 +45,13 @@ def update_file_pwt(md_product,lst_columns_pwt,df_pwt):
     return df_filter_pwt
 
 def main():
+    """	
+    Función principal que orquesta la generación del archivo de trabajo PWT.	
+    Carga el Maestro de Productos y el archivo PWT de referencia. Llama a la función de validación	
+    y sobrescribe el archivo de trabajo PWT con la lista de SKUs que necesitan verificación y los que ya están verificados.	
+    
+    Returns: None: La función orquesta el proceso y guarda el resultado en un archivo Excel (Workfile PWT).
+    """
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: PWT UPDATE ETL ---")
     print("=" * 55)

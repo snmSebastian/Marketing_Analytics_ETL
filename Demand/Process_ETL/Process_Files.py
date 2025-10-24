@@ -1,4 +1,9 @@
-'''Contiene las siguientes funciones:
+'''
+Módulo de orquestación para la Carga Completa (Full Load) de los datos de Demanda (Demand).
+Reutiliza funciones genéricas de E/L del módulo Fill_Rate y define lógica de transformación (T)
+específica para Demanda, incluyendo un mapeo de país distinto y una clave de unicidad adaptada.
+
+Contiene las siguientes funciones:
 - read_files: Lee archivos Excel de un directorio y los consolida en un DataFrame   
 - asign_country_code: Asigna el código de país a cada fila del DataFrame df usando el DataFrame country como referencia.
 - process_columns: Procesa las columnas relevantes del DataFrame df y las convierte a mayúsculas.
@@ -21,11 +26,16 @@ from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet
 # Asgina pais segun el demand group
 def asign_country_code(df_consolidated, df_country):
         """
-        Asigna el código de país a cada fila del DataFrame df
-        usando el DataFrame country como referencia.
+        Asigna el código de país (fk_Country) a cada registro utilizando la columna 'Demand Group'
+        como clave de mapeo contra el DataFrame de referencia
+
+        Args:
+            df_consolidated (pd.DataFrame): DataFrame principal de Demand. Debe contener la columna 'Demand Group'.
+            df_country (pd.DataFrame): DataFrame de referencia para el mapeo. Debe contener 'Demand Group' y 'Country'.
+        Returns:
+            pd.DataFrame: El DataFrame df_consolidated modificado con la nueva columna 'fk_Country'.
         """
         # Crear una columna 'code concat country' que concatena 'Country Code' y 'Destination Country'
-       
         # Crear un mapa de códigos de país a nombres de país
         country_map = df_country.set_index('Demand Group')['Country']
 
@@ -38,8 +48,17 @@ def asign_country_code(df_consolidated, df_country):
 def process_columns(df_consolidated,lst_columns):
     ""    
     """
-            Escoje las columnas relevantes del DataFrame df y las procesa
-            para asegurar que todas las columnas estén en mayúsculas y sin espacios.
+    Renombra la columna 'Global Material' a 'fk_SKU', calcula las claves compuestas ('fk_year_month',
+    'clasification') y genera la clave única 'fk_date_country_clasification'
+    (omitiendo el código de cliente). Finalmente, selecciona las columnas deseadas
+
+    Args:
+        df_consolidated (pd.DataFrame): DataFrame con todas las columnas sin procesar.
+        lst_columns (list): Lista de strings con los nombres de las columnas finales deseadas, incluyendo las recién creadas.
+    Returns:
+        pd.DataFrame: DataFrame final, filtrado y estandarizado, listo para ser guardado.
+    KeyError: Si alguna columna requerida para la creación de claves (ej: 'Fiscal Year')
+             no existe en el DataFrame.
     """
     try:
         
@@ -76,6 +95,15 @@ def process_columns(df_consolidated,lst_columns):
 # Función principal que ejecuta el script.
 # Esta función no recibe parámetros y no devuelve ningún valor.
 def main():
+    print("=" * 55)
+    print("--- 🔄 INICIANDO PROCESO: DEMAND FULL LOAD ETL ---")
+    print("=" * 55)
+    """
+    Función principal que orquesta el flujo ETL de Carga Completa para los datos de Demanda.	
+    Inicializa las rutas, lee los archivos, realiza la adaptación específica de mapeo de país y	
+    procesamiento de claves para Demanda, y guarda el resultado particionado.
+    Returns: None: La función orquesta el proceso y no devuelve un valor.
+    """
     # Importar las rutas de acceso rápido desde config_paths.py.,
     from config_paths import DemandPaths
     historic_raw_dir = DemandPaths.INPUT_RAW_HISTORIC_DIR

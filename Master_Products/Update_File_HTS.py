@@ -1,8 +1,28 @@
+"""
+Módulo de orquestación y validación para la clasificación HTS (Herramientas Manuales o similar).
+Su propósito es revisar el Maestro de Productos ('md_product') filtrando solo los SKUs de la
+unidad de negocio HMT (Hand Tools) y validando si su clasificación HTS está completa
+utilizando un archivo de trabajo ('df_hts') como referencia.
+Genera el archivo de trabajo HTS para la revisión manual.
+"""
+
 import pandas as pd
 import numpy as np
 
 
 def update_file_hts(md_product,lst_columns_hts,df_hts):
+    """
+    Filtra el Maestro de Productos por la SBU 'HMT' y realiza una validación de calidad sobre las columnas HTS. Clasifica
+    cada SKU en base a dos reglas:
+        1) Si es un 'New sku' (no está en el archivo HTS de referencia).
+        2) Si es un 'SKU Existente' pero le faltan datos en campos HTS clave (valores que solo contienen el separador '-' después del concatenado).
+    Args:
+        md_product (pd.DataFrame): El DataFrame del Maestro de Productos principal.
+        lst_columns_hts (list): Lista de columnas HTS y de clasificación necesarias.
+        df_hts (pd.DataFrame): El DataFrame de referencia de HTS (archivo de trabajo).
+    Returns: pd.DataFrame: DataFrame listo para exportar que contiene solo los SKUs HMT con la columna 'check_sku'
+             actualizada para indicar si es un SKU nuevo o si requiere revisión de datos faltantes.
+    """
     # Filtro de md_products aquellos sku de hts y las columnas que necesito
     df_filter_hts=md_product[md_product['GPP SBU']=='HMT'][lst_columns_hts].copy()
     # determino una lst que indica si el sku del md esta en el archivo de hts
@@ -35,6 +55,12 @@ def update_file_hts(md_product,lst_columns_hts,df_hts):
     return df_filter_hts
 
 def main():
+    """	
+    Función principal que orquesta la generación del archivo de trabajo HTS.	
+    Carga el Maestro de Productos y el archivo HTS de referencia. Llama a la función de validación	
+    y sobrescribe el archivo de trabajo HTS con la lista de SKUs que necesitan verificación y los que ya están verificados.	
+    Returns: None: La función orquesta el proceso y guarda el resultado en un archivo Excel (Workfile HTS).
+    """
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: HTS UPDATE ETL ---")
     print("=" * 55)

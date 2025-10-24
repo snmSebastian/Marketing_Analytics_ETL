@@ -1,14 +1,29 @@
+"""
+Módulo de actualización incremental para los datos históricos procesados de Fill Rate.
+Utiliza el principio de actualización por 'reemplazo de partición' (sobrescribiendo
+los registros existentes en un periodo con los nuevos datos) para mantener
+la integridad y actualidad de los archivos Parquet históricos.
+"""
+
 # Librerias
 import pandas as pd
 import glob
 import os
 
-# La importación debe ser relativa al paquete actual.
+# Importamos las funciones ya creadas que usaremos nuevamente
 from .Process_Files import read_files, asign_country_code, process_columns, group_parquet
 
 # Leer los archivos Parquet históricos que se van a actualizar segun:fk_year_month y concatenarlos en un DataFrame
 def read_parquets_to_update(path_parquets_historics, lst_year_month_files_update,lst_columns):
-    """Lee los archivos parquet históricos que corresponden a los periodos a actualizar."""
+    """Lee los archivos parquet históricos que corresponden a los periodos a actualizar.
+    Args:
+        path_parquets_historics (str): Ruta del directorio que contiene los archivos Parquet históricos.
+        lst_year_month_files_update (list): Lista de strings con los periodos 'YYYY-MM' (fk_year_month) a buscar y cargar.
+        lst_columns (list): Lista de columnas esperadas. Usada para inicializar un DataFrame vacío si no se encuentran archivos.
+    Returns:
+        pd.DataFrame: DataFrame consolidado con los datos históricos de los periodos a actualizar, o un DataFrame
+                      vacío con las lst_columns si no hay archivos.
+    """
     lst_files = []
     for year_month in lst_year_month_files_update:
         # Busca archivos que coincidan con el patrón, ej: 'fill_rate_2023-01.parquet'
@@ -24,13 +39,20 @@ def read_parquets_to_update(path_parquets_historics, lst_year_month_files_update
         
     print(f"Archivos parquet a actualizar encontrados: {len(lst_files)}\n")
 
-    
     return pd.concat([pd.read_parquet(file) for file in lst_files], ignore_index=True)
 
 def update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_customer_clasification'):
     """
-    Actualiza el dataframe histórico eliminando los registros viejos y
-    concatenando los nuevos registros del dataframe de actualización.
+    Implementa la lógica de 'delete and insert' (o upsert). Identifica los registros a actualizar en el histórico
+    usando la clave compuesta y los reemplaza concatenando los nuevos registros de df_update.
+    Args:
+        df_parquets_historic (pd.DataFrame): DataFrame que contiene los datos históricos leídos de los archivos Parquet de los periodos a actualizar.
+        df_update (pd.DataFrame): DataFrame con los nuevos registros que deben reemplazar a los existentes.
+        fk_column (str, optional): Nombre de la columna que actúa como clave única/compuesta para la deduplicación/reemplazo. Por defecto es 'fk_date_country_customer_clasification'.
+    Returns:
+        pd.DataFrame: El DataFrame final que contiene los registros históricos que no se actualizaron, más los
+                      nuevos registros de df_update.
+    
     """
     # Obtener la lista de claves únicas a actualizar/reemplazar.
     #print(f'columnas df_update: {df_update.columns}')
@@ -49,6 +71,16 @@ def update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_c
     return df_final
 
 def main():
+    """ 
+    Orquesta el proceso de actualización incremental de Fill Rate.
+        1. Procesa los archivos brutos de la actualización (usando funciones de Process_Files).
+        2. Determina los periodos ('fk_year_month') afectados.
+        3. Carga los archivos Parquet históricos correspondientes.
+        4. Ejecuta la lógica de update_parquets para reemplazar los registros.
+        5. Guarda el resultado final, sobrescribiendo los archivos Parquet originales (particionamiento).
+    Returns: None: La función orquesta el proceso y no devuelve un valor.
+    """
+
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: FILL RATE UPDATE ETL ---")
     print("=" * 55)

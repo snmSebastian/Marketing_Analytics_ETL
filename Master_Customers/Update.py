@@ -1,3 +1,11 @@
+"""
+Módulo principal de actualización y consolidación para el Maestro de Clientes (Master Customers).
+Su objetivo es generar una tabla de dimensión actualizada, integrando los nuevos códigos de cliente
+de las actualizaciones de Fill Rate y Sales, asignando su clasificación de canal y tipo de distribución
+mediante lógica de negocio compleja y tablas de referencia.
+El resultado final es un archivo Excel maestro actualizado (Upsert).
+"""
+
 #---------------- LIBRERIAS -----------------------
 #--------------------------------------------------
 # Liberia
@@ -11,13 +19,16 @@ from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
 
 def complete_clasification(df_consolidated, df_customers_shared, df_customers_clasifications, df_country):
     """
-    Completa la clasificación de los clientes en el DataFrame df_consolidated.
-
+    Aplica la lógica ETL completa para asignar el Canal y Tipo de Distribución (Dist Channel/Type) a los nuevos
+    clientes. Incluye limpieza de código de cliente, mapeo de clasificación compartida, limpieza de
+    notación y la asignación condicional (np.select) basada en el país y el estado del mapeo de canal.
     Args:
-    df_consolidated (pd.DataFrame): DataFrame con la información de clientes nuevos.
-
+        df_consolidated (pd.DataFrame): DataFrame con la información de clientes nuevos (consolidado de Fill Rate y Sales).
+        df_customers_shared (pd.DataFrame): Tabla de referencia de clientes compartidos.
+        df_customers_clasifications (pd.DataFrame): Tabla de referencia con las clasificaciones finales de canales y tipos.
+        df_country (pd.DataFrame): Tabla de referencia para el mapeo de códigos de país.
     Returns:
-    pd.DataFrame: DataFrame con la clasificación completada.
+        pd.DataFrame: DataFrame final con el esquema de la tabla maestra de clientes, incluyendo las columnas 'fk_Dist_Channel' y 'fk_Dist_Type' completadas.
     """
     # Asignacion de pais
     df_consolidated = asign_country_code(df_consolidated, df_country)
@@ -122,12 +133,19 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     # Usar np.select para aplicar todas las condiciones de una vez 
     return df_consolidated
 
-
-
 def update_excel_file(df_master, df_consolidated,name='master_customers'):
     """
-    Actualiza el master customer eliminando los registros viejos y
-    concatenando los nuevos registros del dataframe de actualización.
+    Implementa la lógica de Upsert (reemplazo) sobre el archivo maestro. Los registros se reemplazan si la
+    clave compuesta fk_country_customer existe en el nuevo DataFrame consolidado. Filtra el maestro,
+    excluye los registros a actualizar, y concatena los nuevos.
+    
+    Args:
+        df_master (pd.DataFrame): DataFrame actual del archivo Excel maestro de clientes.
+        df_consolidated (pd.DataFrame): DataFrame con los nuevos registros a insertar o actualizar.
+        name (str, optional): Nombre del maestro, usado para adaptar la clave compuesta (si el código de cliente tiene un nombre diferente). Por defecto es 'master_customers'.
+    Returns:
+        pd.DataFrame: El DataFrame consolidado final, listo para sobrescribir el archivo maestro de
+        clientes.    
     """
     # Obtener la lista de claves únicas a actualizar/reemplazar.
     #print(f'columnas df_update: {df_update.columns}')
@@ -160,11 +178,20 @@ def update_excel_file(df_master, df_consolidated,name='master_customers'):
         df_final=df_final.drop(columns=['fk_country_customer'])
     return df_final
 
-import numpy as np
-import pandas as pd # Asegúrate de importar pandas
-
 def notation_customers(df_update, df_notation_customers):
+    """
+    Aplica un mapeo de corrección para los nombres de clientes. Compara los nombres de los clientes en df_update contra
+    una tabla de errores de notación. Si encuentra una coincidencia, reemplaza el nombre con la versión corregida;
+    de lo contrario, mantiene el nombre original.
     
+    Args:
+        df_update (pd.DataFrame): DataFrame que contiene los nombres de clientes a ser revisados.
+        df_notation_customers (pd.DataFrame): Tabla de referencia con las correcciones de notación
+        ('Text Condition' -> 'Result').
+
+    Returns:
+        pd.DataFrame: El DataFrame df_update con los nombres de clientes corregidos.
+    """
     #  Preparación de llaves 
     # Se crea la columna 'fk_customer' en ambos DataFrames, con la misma limpieza.
     df_notation_customers['fk_customer'] = df_notation_customers['Text Condition'].str.upper().str.strip().str.replace(' ', '')
@@ -193,6 +220,17 @@ def notation_customers(df_update, df_notation_customers):
     return df_update
 
 def main():
+    """	
+    Función principal que orquesta el proceso ETL para actualizar el Maestro de Clientes.	
+    El proceso incluye:
+        1) Consolidación de datos de actualización de Fill Rate y Sales.	
+        2) Asignación de clasificaciones de cliente. 3) Aplicación de la lógica de Upsert al maestro histórico.	
+        4) Corrección de notación de nombres. 5) Guardado final en el archivo Excel maestro.	
+    
+    Returns: None: La función orquesta el proceso y no devuelve un valor,
+                   guardando el resultado en un archivo Excel
+    
+    """
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: MD CUSTOMERS UPDATE ETL ---")
     print("=" * 55)
@@ -232,6 +270,7 @@ def main():
                                  name='master_customers')
     df_update=notation_customers(df_update,df_notation_customers)
     df_update.to_excel(md_customers, index=False)
+
 if __name__ == "__main__":
     main()
     print("Proceso de actualización de clientes completado exitosamente ✅.")

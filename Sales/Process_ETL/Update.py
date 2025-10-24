@@ -1,3 +1,10 @@
+"""
+Módulo de orquestación para el proceso de Actualización Incremental (Upsert) de los datos de Ventas.
+Reutiliza los componentes de procesamiento (E y T) y las funciones de gestión de Parquet (L)
+del módulo Fill_Rate para asegurar una metodología de actualización de datos estandarizada
+y unificada en todo el proyecto ETL.
+"""
+
 # Librerias
 import pandas as pd
 import glob
@@ -8,6 +15,13 @@ from Fill_Rate.Process_ETL.Process_Files import read_files, asign_country_code, 
 from Fill_Rate.Process_ETL.Update import read_parquets_to_update,update_parquets
 
 def main():
+    """
+    Orquesta el flujo de actualización incremental para los datos de Ventas.
+    El proceso incluye: 1) Carga y procesamiento de los nuevos archivos de actualización.
+    2) Determinación de los periodos 'fk_year_month' a actualizar. 3) Aplicación de la
+    lógica de 'Upsert' (reemplazo de registros). 4) Escritura final de los archivos Parquet.
+    Returns: None: La función orquesta el proceso y no devuelve un valor.
+    """
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: SALES UPDATE ETL ---")
     print("=" * 55)

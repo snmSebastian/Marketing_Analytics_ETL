@@ -1,3 +1,10 @@
+"""
+Módulo de funciones de transformación (T) para la construcción y enriquecimiento del Maestro de Productos (Master Products).
+Contiene la lógica central para identificar nuevos SKUs de las fuentes de datos (Fill Rate, Sales, Demand),
+clasificar estos SKUs (asignación de SKU Base, GPP, Corded/Cordless, Bare, etc.) y generar una tabla
+de revisión para el analista.
+"""
+
 #---------------- LIBRERIAS -----------------------
 #--------------------------------------------------
 # Liberia
@@ -13,6 +20,22 @@ from typing import List, Union
 from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
 
 def obtain_new_products(df_fill_rate, df_sales, df_demand, df_new_products,df_master_products):
+    """
+    Consolida los SKUs y sus atributos iniciales de las tres fuentes de datos (Fill Rate, Sales, Demand).
+    Estandariza los nombres de columna y filtra los SKUs que ya existen en el Maestro de Productos, generando
+    un DataFrame inicial de nuevos productos a clasificar.
+
+    Args:
+        df_fill_rate (pd.DataFrame): DataFrame de actualización de Fill Rate.
+        df_sales (pd.DataFrame): DataFrame de actualización de Sales.
+        df_demand (pd.DataFrame): DataFrame de actualización de Demand.
+        df_new_products (pd.DataFrame): DataFrame de productos nuevos (para concatenar con el nuevo resultado).
+        df_master_products (pd.DataFrame): DataFrame del Maestro de Productos actual.
+    
+    Returns: pd.DataFrame: DataFrame con solo los SKUs nuevos, inicializado con las columnas completas del Maestro para
+            su posterior enriquecimiento.
+    """
+
     lst_columns_fill_and_sales=['Country Material', 'Country Material Name','LAG Brand',
                                 'GPP Division Code', 'GPP Division', 'GPP Category', 'GPP Portfolio']
     lst_columns_demand=['Global Material', 'Global Material Description','LAG Brand',
@@ -59,10 +82,12 @@ def obtain_new_products(df_fill_rate, df_sales, df_demand, df_new_products,df_ma
 
 def assign_sku_base(sku_completo, skus_base_set):
     """
-    Busca el SKU base probando todos los prefijos del SKU completo,
-    desde el más largo al más corto. No requiere longitudes mínimas/máximas predefinidas.
-
-    Donde L_nuevo es la longitud del SKU completo.
+    Busca el SKU base probando prefijos decrecientes del SKU completo (desde la longitud total hasta una longitud mínima
+    de 3 o (longitud total - 11)). Retorna el prefijo más largo que se encuentra en el conjunto de SKUs base conocidos
+    
+    Args:
+        sku_completo (str): El SKU a clasificar.
+        skus_base_set (set): Conjunto de SKUs base únicos del maestro histórico.
     """
     
     #  Iterar sobre las longitudes de los prefijos del SKU nuevo, DE REVERSA.
@@ -89,10 +114,17 @@ def assign_info_by_key(
     columns_to_merge: List[str]
 ) -> pd.DataFrame:
     """ 
-    Rellena los valores NaN de las columnas especificadas en el DataFrame destino 
-    (df_target) usando la información del DataFrame fuente (df_source), cruzando
-    por la clave o conjunto de claves (key_column). Crea las columnas faltantes 
-    en df_target si no existen.
+    Realiza una fusión (left join) entre el DataFrame destino y el DataFrame fuente usando una o varias columnas clave.
+    Rellena las columnas especificadas en el destino solo si el valor actual es NaN. La función es defensiva: crea las
+    columnas faltantes en el destino si es necesario.
+
+    Args:
+        df_target (pd.DataFrame): DataFrame destino (donde se llenarán los NaN).
+        df_source (pd.DataFrame): DataFrame fuente (contiene la información de look-up).
+        key_column (Union[str, List[str]]): Columna(s) clave para la fusión.
+        columns_to_merge (List[str]): Lista de columnas a transferir de la fuente al destino.
+    Returns: pd.DataFrame: El DataFrame destino con los valores NaN rellenados de la fuente.
+    Raises: KeyError: Si la clave o las columnas a fusionar no existen en el DataFrame fuente.
     """
     
     # ---------------- 0. Preparación de Claves y Copia ----------------
@@ -163,10 +195,15 @@ def assign_info_by_key(
     return df_merged # Ya tiene el índice original, no necesita reset_index()
 
 def assign_gpp_by_portafolio(portafolio, lst_portafolio,df_gpp):
-    """ Para aquellos sku que no tienen sku base, asigna el gpp por portafolio.
-      Verifica si el portafolio dado por el  sistema existe o no, y asigna el gpp.
-      
-      retorna el gpp si existe, sino retorna "-".
+    """
+    Asigna el código GPP a un SKU que no tiene SKU Base, buscando una coincidencia por prefijo en la descripción del Portafolio
+    y mapeando el primer resultado válido. Retorna el GPP encontrado o "-".
+    
+    Args:
+        portafolio (str): El portafolio a clasificar.
+        lst_portafolio (list): Lista de portafolios únicos del maestro histórico.
+    Return:
+        El GPP que corresponde al portafolio que viene de SAP
     """
    
     portafolio_a_buscar = portafolio.strip().upper().replace(' ', '') 
@@ -179,7 +216,16 @@ def assign_gpp_by_portafolio(portafolio, lst_portafolio,df_gpp):
                 return "-"
 
 def verify_psd(sku, lst_psd):
-    """ Verofoca si el sku esta en la base compartida por PSD, si es asi, asigna el gpp de PSD"""
+    """
+    Verifica si un SKU se encuentra en la lista compartida de PSD. Si es así, le asigna el código GPP específico de PSD;
+    de lo contrario, retorna "-".
+    
+    Args:
+        sku (str): El SKU a verificar.
+        lst_psd (list): Lista de SKUs únicos de PSD.
+    Return:
+        GPP de PSD si existe en la base, si no "-"
+    """
     sku_a_buscar = sku.strip().upper().replace(' ', '')
     if sku_a_buscar in lst_psd:
         return "PSD-70-70X-70999"
@@ -187,7 +233,14 @@ def verify_psd(sku, lst_psd):
         return "-"
     
 def verify_gpp(gpp, lst_gpp):
-    """ Verifica si el gpp existe en la lista de gpp, si es asi, retorna el gpp, sino retorna "-" """
+    """
+    Comprueba la validez de un código GPP asegurando que exista en la lista de GPPs conocidos. Retorna el GPP si es válido,
+    o "-".
+    
+    Args:
+        gpp (str): El código GPP a verificar.
+        lst_gpp (list): Lista de códigos GPP únicos.
+    """
     gpp_a_buscar = str(gpp).strip().upper().replace(' ', '')
     if gpp_a_buscar in lst_gpp:
         return gpp_a_buscar
@@ -196,7 +249,10 @@ def verify_gpp(gpp, lst_gpp):
 
 def corded_or_cordless_or_gas(sku,description,category_description,portfolio_description,corded_or_cordless):
     """ 
-    Verifica si el SKU es 'Corded' o 'Cordless' basándose en la presencia de ciertas palabras clave.
+    Determina el tipo de energía (Corded, Cordless, o Gas) del SKU. Utiliza una jerarquía de reglas basada en:
+        1) Prefijos del SKU.
+        2) Palabras clave en la descripción.
+        3) Palabras clave en la Categoría/Portafolio.
     """
     sku = sku.strip().upper().replace(' ', '')
     description = description.strip().upper().replace(' ', '')
@@ -247,8 +303,14 @@ def corded_or_cordless_or_gas(sku,description,category_description,portfolio_des
 
 def assing_qty_batteries(sku, description, batteries_qty):
     """
-    Asigna la cantidad de baterías a un SKU basado en su descripción.
-    Si la descripción contiene información sobre baterías, se extrae y se asigna.
+    Asigna la cantidad de baterías. Utiliza un mapeo de sufijos específicos del SKU (ej., X1, L2) para inferir la
+    cantidad de baterías, o asigna 0 si el SKU termina en B (Bare Tool).
+
+    Args:
+        sku (str): El SKU a clasificar.
+        description (str): La descripción del SKU.
+        batteries_qty (list): Lista de cantidades de baterías.
+
     """
     sku = str(sku).strip().upper().replace(' ', '')
     if '/' in sku:
@@ -275,8 +337,12 @@ def assing_qty_batteries(sku, description, batteries_qty):
 
 def assing_voltaje(description, voltaje):
     """
-    Asigna el voltaje a un SKU basado en su descripción.
-    Si la descripción contiene información sobre voltaje, se extrae y se asigna.
+    Asigna el valor del Voltaje al SKU extrayéndolo de las palabras clave de la descripción (ej., '20V', '54V').
+    
+    Args:
+        description (str): La descripción del SKU.
+        voltaje (list): Lista de voltajes.
+        
     """
     description = description.strip().upper().replace(' ', '')
     lst_voltajes = [
@@ -296,10 +362,12 @@ def assing_voltaje(description, voltaje):
     
 def assign_bare(sku,quantity_batteries,corded_or_cordless):
     """
-    Asigna el valor de 'Bare' a un SKU basado en la cantidad de baterías.
-    Bare: el sku indica que no trae baterias
-    non bare: el sku indica que trae baterias
-    bare+batteries: la descripcion  indica que trae baterias y es el sku es bare
+    Asigna el valor de Bare (la herramienta viene sin baterías/cargador) según una lógica que combina el tipo de
+    herramienta (CORDLESS) con la cantidad de baterías. Puede resultar en 'Bare', 'Non Bare', o 'Bare + Batteries'.
+    
+        Bare: el sku indica que no trae baterias
+        non bare: el sku indica que trae baterias
+        bare+batteries: la descripcion  indica que trae baterias y es el sku es bare
     """
     sku = str(sku).strip().upper().replace(' ', '')
     sku = sku.split('/')[0]  # Toma la parte antes de la barra diagonal
@@ -319,6 +387,11 @@ def assign_bare(sku,quantity_batteries,corded_or_cordless):
             return '-'
         
 def assign_sub_brand(sku,description,brand):
+    """
+    Asigna la Sub-Marca del producto basada en reglas específicas del negocio (ej., FATMAX, IAR EXPERT) verificando la
+    descripción y el código SKU.
+    """
+
     description = description.strip().upper().replace(' ', '')
     brand = brand.strip().upper().replace(' ', '')
     if 'FATMA' in description:
@@ -331,6 +404,17 @@ def assign_sub_brand(sku,description,brand):
         return "-"  # Retorna la marca original si no se encuentra una sub-marca específica
 
 def review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp):
+
+    """
+    Identifica y extrae los registros del Maestro de Productos histórico donde el mismo SKU Base está asociado a múltiples combinaciones
+    de SBU y Categoría (SBU_Category).
+    
+    Esto genera una lista de SKUs que requieren revisión manual para asegurar la coherencia en la jerarquía del producto.
+
+    Args:
+        df_master_products (pd.DataFrame): El Maestro de Productos histórico.
+        lst_colums_gpp (list): Lista de columnas de clasificación GPP deseadas.
+    """
     # Creo  la columna de combinación única SBU+Category
     df_master_products['SBU_Category'] = df_master_products['GPP SBU'].astype(str) + '-' + df_master_products['GPP Category Description'].astype(str)
     # Contar la cantidad de combinaciones únicas (SBU + Category) por cada 'SKU Base'
@@ -349,6 +433,17 @@ def review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp):
     return df_resultado 
 
 def main():
+    """	
+    Función principal que orquesta el pipeline de identificación y clasificación de nuevos productos.	
+    El flujo incluye:
+        1) Consolidación de nuevos SKUs.
+        2) Asignación de SKU Base (si aplica).	
+        3) Look-up de GPP (por SKU Base o por Portafolio).
+        4) Asignación de atributos (Corded/Cordless, Voltaje, Bare).	
+        5) Generación de un archivo de revisión Excel (WORKFILE_NEW_PRODUCTS_REVIEW_FILE) que incluye nuevos SKUs y SKUs Base con clasificaciones inconsistentes.	
+    Returns: None: La función orquesta el proceso y no devuelve un valor,
+                   guardando el resultado en un archivo Excel        
+    """
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
     print("=" * 55)
