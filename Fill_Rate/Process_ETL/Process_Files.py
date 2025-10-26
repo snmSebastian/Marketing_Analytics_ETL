@@ -146,7 +146,7 @@ def process_columns(df_consolidated,lst_columns):
                                                             df_consolidated['fk_Sold_To_Customer_Code']+ '-' +
                                                             df_consolidated['clasification']).str.upper().str.strip()
         df_consolidated['fk_Date']=pd.to_datetime(df_consolidated['fk_year_month'],
-                                                  format='%Y-%m',
+                                                  format='%Y-%b',
                                                   errors='coerce')
        
         df_processed = df_consolidated[lst_columns].copy()                                                                                                                                                                           

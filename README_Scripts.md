@@ -53,8 +53,12 @@ scripts/
 
 ├── Automation/ # 📧 Scripts de automatización y monitoreo de procesos (Ej: envío de notificaciones por email al finalizar los ETL).
 
-    └── ...
-
+    └── Workflows
+        └──W_update_md_products.py
+    
+    └── init_scrits ( contiene archivos .bat para ser ejecutados mediante programador de tareas)
+        └──update_md_products.bat
+    
 ├── Shared_Information_for_Projects / # 🌍 Contiene datos maestros, tablas de referencia o utilidades transversales (Dimensiones Comunes) que son consumidas por otros módulos.
 
     └── Calendar.py

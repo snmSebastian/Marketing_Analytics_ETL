@@ -78,7 +78,7 @@ def process_columns(df_consolidated,lst_columns):
                                                             df_consolidated['fk_Country']+ '-' +
                                                             df_consolidated['clasification']).str.lower().str.strip()
         df_consolidated['fk_Date']=pd.to_datetime(df_consolidated['fk_year_month'],
-                                                  format='%Y-%m',
+                                                  format='%Y-%b',
                                                   errors='coerce')
         df_consolidated.rename(columns={
             'Global Material': 'fk_SKU'}, inplace=True)
