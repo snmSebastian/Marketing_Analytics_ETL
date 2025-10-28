@@ -22,7 +22,7 @@ import glob
 import os
 
 # Importo funciones creadas que seran usadas nuevamente
-from Fill_Rate.Process_ETL.Process_Files import read_files, asign_country_code, process_columns, group_parquet
+from Fill_Rate.Process_ETL.Process_Files import read_files, asign_country_code, process_columns, group_parquet,format_columns
 
 def main():
     """
@@ -56,6 +56,14 @@ def main():
                    'Total Sales', 'Total Cost', 'Units Sold']
     df_consolidated = asign_country_code(df_consolidated, df_country)
     df_processed=process_columns(df_consolidated,lst_columns)
+    
+    # --- Formato de columnas ---
+    lst_columns_srt = ['fk_Date','fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code', 'fk_SKU',
+                   'fk_date_country_customer_clasification']
+    lst_columns_float = ['Total Sales', 'Total Cost', 'Units Sold']
+    df_processed=format_columns(df_processed,lst_columns_srt,lst_columns_float)
+    
+    #  --- ESCRITURA DE ARCHIVOS PARQUET SEGMENTADOS --
     group_parquet(df_processed, processed_parquet_dir,name='sales')
 
 # --- EJECUCION DEL SCRIPT ---

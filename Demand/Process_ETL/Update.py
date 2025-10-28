@@ -12,7 +12,7 @@ import glob
 import os
 
 # La importación debe ser relativa al paquete actual.
-from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet
+from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet,format_columns
 from Fill_Rate.Process_ETL.Update import read_parquets_to_update,update_parquets
 from Demand.Process_ETL.Process_Files import asign_country_code, process_columns
 
@@ -56,6 +56,12 @@ def main():
     df_parquets_historic = read_parquets_to_update(demand_historic_processed_dir, lst_year_month_files_update,lst_columns)
     
     df_final = update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_clasification')
+    #--- Formato de columnas ----
+    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU',
+                  'fk_date_country_clasification']
+    lst_columns_float=['Demand History & Forecast-QTY', 'Shipment History& Forecast-Qty',
+                  'Demand History & Forecast-GSV', 'Shipment History&Forecast-GSV']
+    df_final=format_columns(df_final,lst_columns_str,lst_columns_float)
     
     # --- ESCRITURA DE LOS DATOS ACTUALIZADOS ---
     group_parquet(df_final, demand_historic_processed_dir,name='demand')

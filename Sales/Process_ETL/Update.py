@@ -11,7 +11,7 @@ import glob
 import os
 
 # La importación debe ser relativa al paquete actual.
-from Fill_Rate.Process_ETL.Process_Files import read_files, asign_country_code, process_columns, group_parquet
+from Fill_Rate.Process_ETL.Process_Files import read_files, asign_country_code, process_columns, group_parquet,format_columns
 from Fill_Rate.Process_ETL.Update import read_parquets_to_update,update_parquets
 
 def main():
@@ -58,6 +58,11 @@ def main():
     
     df_final = update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_customer_clasification')
     
+    # --- Formato de columnas ---
+    lst_columns_srt = ['fk_Date','fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code', 'fk_SKU',
+                   'fk_date_country_customer_clasification']
+    lst_columns_float = ['Total Sales', 'Total Cost', 'Units Sold']
+    df_final=format_columns(df_final,lst_columns_srt,lst_columns_float)
     # --- ESCRITURA DE LOS DATOS ACTUALIZADOS ---
     group_parquet(df_final, sales_historic_processed_dir,name='sales')
 

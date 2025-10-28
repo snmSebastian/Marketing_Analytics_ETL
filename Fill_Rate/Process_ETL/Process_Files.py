@@ -97,7 +97,13 @@ def asign_country_code(df_consolidated, df_country):
         df_consolidated['fk_Country'] = df_consolidated['code concat country'].map(country_map)
 
         return df_consolidated
-    
+
+import pandas as pd
+import numpy as np
+
+import pandas as pd
+
+
 def process_columns(df_consolidated,lst_columns):
     """    
         Renombra, calcula columnas clave ('fk_year_month', 'clasification', 'fk_date_country_customer_clasification',
@@ -158,6 +164,37 @@ def process_columns(df_consolidated,lst_columns):
                 print(f"Error: La columna {e} no se encontró en los archivos. ")
     return df_processed
 
+def format_columns(df: pd.DataFrame, lst_columns_str: list, lst_columns_float: list) -> pd.DataFrame:
+    """
+    Convierte las columnas especificadas a str o float, manejando errores de conversión:
+    - Los errores en float se convierten a NaN y luego a 0.
+    - Los valores NaN/nulos/errores en str se convierten a la cadena vacía "".
+    """
+    
+    # 1. CONVERSIÓN Y LIMPIEZA DE CADENAS (STR)
+    for col in lst_columns_str:
+        # 1.1. Convertir a str
+        df[col] = df[col].astype(str)
+        
+        # 1.2. Limpieza de strings: minúsculas, reemplazo de 'nan' a '', y eliminar espacios
+        df[col] = (df[col].str.lower()
+                           .str.replace('nan', '', regex=False)
+                           .str.strip())
+        
+        # 1.3. Opcional: Manejo de nulos originales que no son 'nan' string (ej. np.nan)
+        # Aunque astype(str) maneja la mayoría, este fillna es un seguro extra.
+        df[col] = df[col].fillna('')
+
+    # 2. CONVERSIÓN A FLOTANTE (FLOAT) con manejo de errores
+    for col in lst_columns_float:
+        # 2.1. Conversión con manejo de errores (errors='coerce' -> errores a NaN)
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        # 2.2. Reemplazar NaN (errores de conversión) por 0, y asegurar dtype float
+        df[col] = df[col].fillna(0).astype(float)
+        
+    return df
+
 def group_parquet(df_processed, output_path,name='fill_rate'):
     """ Guarda un dataframe consolidado en archivos Parquet segmentados por año-mes.
     Args:
@@ -205,6 +242,14 @@ def main():
                    'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
     df_consolidated = asign_country_code(df_consolidated, df_country)
     df_processed=process_columns(df_consolidated,lst_columns)
+    # Defino formato de las columnas
+    lst_columns_str=['fk_Date', 'fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code',
+       'fk_SKU', 'fk_date_country_customer_clasification']
+    
+    lst_columns_float=['Fill Rate First Pass Order Qty', 'Fill Rate First Pass Invoice Qty',
+       'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
+    df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
+    
     group_parquet(df_processed, processed_parquet_dir, name='fill_rate')
 
 

@@ -11,7 +11,8 @@ import glob
 import os
 
 # Importamos las funciones ya creadas que usaremos nuevamente
-from .Process_Files import read_files, asign_country_code, process_columns, group_parquet
+from .Process_Files import read_files, asign_country_code, process_columns, group_parquet, format_columns
+
 
 # Leer los archivos Parquet históricos que se van a actualizar segun:fk_year_month y concatenarlos en un DataFrame
 def read_parquets_to_update(path_parquets_historics, lst_year_month_files_update,lst_columns):
@@ -117,6 +118,13 @@ def main():
     df_parquets_historic = read_parquets_to_update(fill_rate_historic_processed_dir, lst_year_month_files_update,lst_columns)
     
     df_final = update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_customer_clasification')
+    # Defino formato de las columnas
+    lst_columns_str=['fk_Date', 'fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code',
+       'fk_SKU', 'fk_date_country_customer_clasification']
+    
+    lst_columns_float=['Fill Rate First Pass Order Qty', 'Fill Rate First Pass Invoice Qty',
+       'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
+    df_final=format_columns(df_final,lst_columns_str,lst_columns_float)
     
     # --- ESCRITURA DE LOS DATOS ACTUALIZADOS ---
     group_parquet(df_final, fill_rate_historic_processed_dir,name='fill_rate')

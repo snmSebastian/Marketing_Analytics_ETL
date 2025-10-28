@@ -20,7 +20,7 @@ import pandas as pd
 import glob
 import os
 
-from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet
+from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet,format_columns
 
 
 # Asgina pais segun el demand group
@@ -121,6 +121,15 @@ def main():
                   'Demand History & Forecast-GSV', 'Shipment History&Forecast-GSV']
     df_consolidated = asign_country_code(df_consolidated, df_country)
     df_processed=process_columns(df_consolidated,lst_columns)
+
+    #--- Formato de columnas ----
+    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU',
+                  'fk_date_country_clasification']
+    lst_columns_float=['Demand History & Forecast-QTY', 'Shipment History& Forecast-Qty',
+                  'Demand History & Forecast-GSV', 'Shipment History&Forecast-GSV']
+    df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
+    
+    # --- Agrupacion en archivos parquets
     group_parquet(df_processed, processed_parquet_dir,name='demand')
 
 
