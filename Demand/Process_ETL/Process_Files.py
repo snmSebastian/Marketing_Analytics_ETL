@@ -96,7 +96,7 @@ def process_columns(df_consolidated,lst_columns):
 # Esta función no recibe parámetros y no devuelve ningún valor.
 def main():
     print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: DEMAND FULL LOAD ETL ---")
+    print("---  INICIANDO PROCESO: DEMAND FULL LOAD ETL ---")
     print("=" * 55)
     """
     Función principal que orquesta el flujo ETL de Carga Completa para los datos de Demanda.	
@@ -136,5 +136,8 @@ def main():
 # --- EJECUCION DEL SCRIPT ---
 # Es una buena práctica envolver la ejecución principal en un bloque if __name__ == "__main__":
 if __name__ == "__main__":
-    main()
-    print("Script de procesamiento de archivos historicos de Demand ejecutado correctamente.")
+    try:
+        main()
+        print("Script de procesamiento de archivos historicos de Demand ejecutado correctamente.")
+    except Exception as e:
+        print(f"Error en procesamiento de archivos historicos de Demand: {e}")

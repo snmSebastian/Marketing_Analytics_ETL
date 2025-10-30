@@ -257,5 +257,8 @@ def main():
 # --- EJECUCION DEL SCRIPT ---
 # Es una buena práctica envolver la ejecución principal en un bloque if __name__ == "__main__":
 if __name__ == "__main__":
-    main()
-    print("Processing of historical Fill Rate data completed successfully. ✅.")
+    try:
+        main()
+        print("Processing of historical Fill Rate data completed successfully.")
+    except Exception as e:
+        print(f"Error en procesamiento de datos de Fill Rate: {e}")

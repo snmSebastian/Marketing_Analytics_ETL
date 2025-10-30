@@ -14,6 +14,7 @@ import numpy as np
 # Permite buscar y recuperar una lista de nombres de archivos que coinciden con un patrón específico.
 import glob
 import os
+import sys
 
 from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
 
@@ -232,45 +233,50 @@ def main():
     
     """
     print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: MD CUSTOMERS UPDATE ETL ---")
+    print("---  INICIANDO PROCESO: MD CUSTOMERS UPDATE ETL ---")
     print("=" * 55)
     #--------------------------------------------------
     #---------------- RUTAS ---------------------------
-    from config_paths import MasterCustomersPaths
-    country_code_file=MasterCustomersPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
-    customers_shared=MasterCustomersPaths.INPUT_RAW_Customers_Shared_by_Country_FILE
-    md_customers=MasterCustomersPaths.OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE_PRUEBA
-    notation_customers_file=MasterCustomersPaths.INPUT_RAW_NOTATION_NAMES_FILE
-    
-    fill_rate_update=MasterCustomersPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
-    sales_update=MasterCustomersPaths.INPUT_RAW_UPDATE_SALES_DIR
-    
-    # --- LECTURA DE ARCHIVOS DE CONFIGURACIÓN ---
-    df_customers_shared = pd.read_excel(customers_shared,sheet_name='Customers_Shared_by_Country', dtype=str, engine='openpyxl')
-    df_customers_clasifications = pd.read_excel(customers_shared,sheet_name='Clasifications', dtype=str, engine='openpyxl')
-    df_country = pd.read_excel(country_code_file,
-                                   sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
-    df_notation_customers=pd.read_excel(notation_customers_file, dtype=str, engine='openpyxl')
-    df_fill_rate=read_files(fill_rate_update)
-    df_sales=read_files(sales_update)
-    df_master=pd.read_excel(md_customers, dtype=str, engine='openpyxl')
+    try:
+        from config_paths import MasterCustomersPaths
+        country_code_file=MasterCustomersPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
+        customers_shared=MasterCustomersPaths.INPUT_RAW_Customers_Shared_by_Country_FILE
+        md_customers=MasterCustomersPaths.OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE_PRUEBA
+        notation_customers_file=MasterCustomersPaths.INPUT_RAW_NOTATION_NAMES_FILE
+        
+        fill_rate_update=MasterCustomersPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
+        sales_update=MasterCustomersPaths.INPUT_RAW_UPDATE_SALES_DIR
+        
+        # --- LECTURA DE ARCHIVOS DE CONFIGURACIÓN ---
+        df_customers_shared = pd.read_excel(customers_shared,sheet_name='Customers_Shared_by_Country', dtype=str, engine='openpyxl')
+        df_customers_clasifications = pd.read_excel(customers_shared,sheet_name='Clasifications', dtype=str, engine='openpyxl')
+        df_country = pd.read_excel(country_code_file,
+                                    sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+        df_notation_customers=pd.read_excel(notation_customers_file, dtype=str, engine='openpyxl')
+        df_fill_rate=read_files(fill_rate_update)
+        df_sales=read_files(sales_update)
+        df_master=pd.read_excel(md_customers, dtype=str, engine='openpyxl')
 
-    # --- LECTURA Y CONSOLIDACIÓN DE DATOS DE ACTUALIZACIÓN --
-    lst_columns=['Country Code', 'Destination Country','Sold-To Customer Code','Sold-To Customer','Sold-To Dist Channel']
-    df_fill_rate=df_fill_rate[lst_columns]
-    df_sales=df_sales[lst_columns]
-    
-    df_consolidated=pd.concat([df_fill_rate, df_sales], ignore_index=True)
-    df_consolidated=complete_clasification(df_consolidated,
-                                           df_customers_shared,
-                                           df_customers_clasifications,
-                                           df_country)
-    df_update=update_excel_file(df_master,
-                                 df_consolidated,
-                                 name='master_customers')
-    df_update=notation_customers(df_update,df_notation_customers)
-    df_update.to_excel(md_customers, index=False)
-
+        # --- LECTURA Y CONSOLIDACIÓN DE DATOS DE ACTUALIZACIÓN --
+        lst_columns=['Country Code', 'Destination Country','Sold-To Customer Code','Sold-To Customer','Sold-To Dist Channel']
+        
+        df_fill_rate=df_fill_rate[lst_columns]
+        df_sales=df_sales[lst_columns]
+        
+        df_consolidated=pd.concat([df_fill_rate, df_sales], ignore_index=True)
+        df_consolidated=complete_clasification(df_consolidated,
+                                            df_customers_shared,
+                                            df_customers_clasifications,
+                                            df_country)
+        df_update=update_excel_file(df_master,
+                                    df_consolidated,
+                                    name='master_customers')
+        df_update=notation_customers(df_update,df_notation_customers)
+        df_update.to_excel(md_customers, index=False)
+        print("Proceso de actualización de clientes completado exitosamente.")
+        pass 
+    except Exception as e:
+        print(f"Error en procesamiento de datos de MD Customers: {e}")
+        sys.exit(1)
 if __name__ == "__main__":
     main()
-    print("Proceso de actualización de clientes completado exitosamente ✅.")

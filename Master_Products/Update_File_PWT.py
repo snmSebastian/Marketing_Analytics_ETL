@@ -7,7 +7,7 @@ Genera el archivo de trabajo PWT para la revisión manual.
 """
 import pandas as pd
 import numpy as np
-
+import sys
 def update_file_pwt(md_product,lst_columns_pwt,df_pwt):
     """
     Filtra el Maestro de Productos por la SBU 'PWT' y realiza una validación de calidad sobre sus columnas de clasificación
@@ -55,20 +55,23 @@ def main():
     print("=" * 55)
     print("--- 🔄 INICIANDO PROCESO: PWT UPDATE ETL ---")
     print("=" * 55)
-    from config_paths import MasterProductsPaths
-    path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
-    path_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
-    lst_columns_pwt=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP SBU',
-       'GPP Division Code', 'GPP Division Description',
-       'GPP Category Description', 'GPP Portfolio Description','Group 1','Group 2']
-    df_pwt=pd.read_excel(path_pwt, dtype=str, engine='openpyxl')
-    df_md_product=pd.read_excel(path_md_product, dtype=str, engine='openpyxl')
-    
-    df_update_pwt=update_file_pwt(df_md_product,lst_columns_pwt,df_pwt)
-    df_update_pwt.to_excel(path_pwt, index=False)
-    
+    try:
+        from config_paths import MasterProductsPaths
+        path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
+        path_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
+        lst_columns_pwt=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP SBU',
+        'GPP Division Code', 'GPP Division Description',
+        'GPP Category Description', 'GPP Portfolio Description','Group 1','Group 2']
+        df_pwt=pd.read_excel(path_pwt, dtype=str, engine='openpyxl')
+        df_md_product=pd.read_excel(path_md_product, dtype=str, engine='openpyxl')
+        
+        df_update_pwt=update_file_pwt(df_md_product,lst_columns_pwt,df_pwt)
+        df_update_pwt.to_excel(path_pwt, index=False)
+        print("Proceso de actualización de productos completado exitosamente.")
+        pass
+    except Exception as e:
+        print(f'Error en procesamiento de datos de PWT: {e}')
+        sys.exit(1)
+
 if __name__ == "__main__":
     main()
-    print("Proceso de actualización de productos completado exitosamente.")
-
-        

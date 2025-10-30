@@ -10,7 +10,7 @@ información de Brand Group, Category Group y las clasificaciones HTS/PWT.
 # --------------------------------------------------
 import pandas as pd
 import numpy as np
-
+import  sys
 # mapa de estandarización de marcas 
 BRAND_STANDARD_MAP = {
     "BLACK + DECKER": ["B+D", "BLACK&DECKER", "BLACKANDDECKER", "BLACK+DECKER®", "BLACK + DECKER"],
@@ -168,84 +168,87 @@ def main():
     Returns: None: La función orquesta el proceso y sobrescribe el archivo Maestro de Productos final.
     """
     print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
+    print("---  INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
     print("=" * 55)
-    
-    # --- 1. DEFINICIONES Y CONFIGURACIÓN ---
-    COL_KEY = 'SKU'
-    lst_colums_gpp = [ 'SKU Base', 'SKU Description', 'Brand', 'GPP', 'GPP SBU',
-    'GPP SBU Description', 'SBU Type', 'GPP Division Code',
-    'GPP Division Description', 'GPP Category Code',
-    'GPP Category Description', 'GPP Portfolio Code',
-    'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-    'Voltaje', 'Bare', 'Sub-Brand']
+    try:
+        # --- 1. DEFINICIONES Y CONFIGURACIÓN ---
+        COL_KEY = 'SKU'
+        lst_colums_gpp = [ 'SKU Base', 'SKU Description', 'Brand', 'GPP', 'GPP SBU',
+        'GPP SBU Description', 'SBU Type', 'GPP Division Code',
+        'GPP Division Description', 'GPP Category Code',
+        'GPP Category Description', 'GPP Portfolio Code',
+        'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
+        'Voltaje', 'Bare', 'Sub-Brand']
 
-    lst_col_md_product = [COL_KEY] + lst_colums_gpp + ['Brand Group', 'Brand + SBU', 'Group 1',
-        'Group 2', 'Category Group', 'Big Rock', 'Top Category', 'NPI Project',
-        'Categoria HTS', 'Familia HTS', 'Sub Familia HTS', 'Clase HTS',
-        'NPI Project HTS', 'Posicionamient HTS', 'Link']
+        lst_col_md_product = [COL_KEY] + lst_colums_gpp + ['Brand Group', 'Brand + SBU', 'Group 1',
+            'Group 2', 'Category Group', 'Big Rock', 'Top Category', 'NPI Project',
+            'Categoria HTS', 'Familia HTS', 'Sub Familia HTS', 'Clase HTS',
+            'NPI Project HTS', 'Posicionamiento HTS', 'Link']
 
-    from config_paths import MasterProductsPaths
-    path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
-    path_sku_review = MasterProductsPaths.WORKFILE_NEW_PRODUCTS_REVIEW_FILE
-    path_hts=MasterProductsPaths.WORKFILE_HTS_FILE
-    path_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
-    path_brand_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE # Usamos una variable para el archivo
+        from config_paths import MasterProductsPaths
+        path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
+        path_sku_review = MasterProductsPaths.WORKFILE_NEW_PRODUCTS_REVIEW_FILE
+        path_hts=MasterProductsPaths.WORKFILE_HTS_FILE
+        path_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
+        path_brand_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE # Usamos una variable para el archivo
 
-    # ---  LECTURA DE FUENTES ---
-    df_hts = pd.read_excel(path_hts, dtype=str, engine='openpyxl')
-    df_pwt = pd.read_excel(path_pwt, dtype=str, engine='openpyxl')
-    df_brand = pd.read_excel(path_brand_gpp, sheet_name='Brand', dtype=str, engine='openpyxl')
-    df_gpp = pd.read_excel(path_brand_gpp, sheet_name='GPP', dtype=str, engine='openpyxl')
+        # ---  LECTURA DE FUENTES ---
+        df_hts = pd.read_excel(path_hts, dtype=str, engine='openpyxl')
+        df_pwt = pd.read_excel(path_pwt, dtype=str, engine='openpyxl')
+        df_brand = pd.read_excel(path_brand_gpp, sheet_name='Brand', dtype=str, engine='openpyxl')
+        df_gpp = pd.read_excel(path_brand_gpp, sheet_name='GPP', dtype=str, engine='openpyxl')
 
-    # ---  PROCESO ETL CENTRAL ---
-    
-    #  Actualizar/Agregar SKUs base
-    df_final = update_master_products(path_md_product, path_sku_review, lst_col_md_product, lst_colums_gpp)
-    
-    #  Agregar info HTS
-    lst_columns_hts=['Big Rock', 'Top Category', 'NPI Project', 'Categoria HTS', 'Familia HTS',
-                     'Sub Familia HTS', 'Clase HTS', 'NPI Project HTS', 'Posicionamiento HTS']
-    df_final = update_master_data(df_final, df_hts, COL_KEY, lst_columns_hts)
-    
-    #  Agregar info PWT
-    lst_columns_pwt=['Group 1','Group 2']
-    df_final = update_master_data(df_final, df_pwt, COL_KEY, lst_columns_pwt)
+        # ---  PROCESO ETL CENTRAL ---
+        
+        #  Actualizar/Agregar SKUs base
+        df_final = update_master_products(path_md_product, path_sku_review, lst_col_md_product, lst_colums_gpp)
+        
+        #  Agregar info HTS
+        lst_columns_hts=['Big Rock', 'Top Category', 'NPI Project', 'Categoria HTS', 'Familia HTS',
+                        'Sub Familia HTS', 'Clase HTS', 'NPI Project HTS', 'Posicionamiento HTS']
+        df_final = update_master_data(df_final, df_hts, COL_KEY, lst_columns_hts)
+        
+        #  Agregar info PWT
+        lst_columns_pwt=['Group 1','Group 2']
+        df_final = update_master_data(df_final, df_pwt, COL_KEY, lst_columns_pwt)
 
-    #  TRATAMIENTO DE BRAND Y ASIGNACIÓN DE BRAND GROUP
-    
-    # Crear el mapa inverso solo una vez
-    brand_map_inverse = create_inverse_brand_map(BRAND_STANDARD_MAP)
-    
-    #  Normalizar y mapear Brand (vectorizado y rápido)
-    df_final['Brand_Normalized'] = df_final["Brand"].str.upper().str.strip().str.replace(' ', '')
-    df_final['Brand'] = df_final['Brand_Normalized'].map(brand_map_inverse).fillna(df_final['Brand'])
-    df_final = df_final.drop(columns=['Brand_Normalized'])
+        #  TRATAMIENTO DE BRAND Y ASIGNACIÓN DE BRAND GROUP
+        
+        # Crear el mapa inverso solo una vez
+        brand_map_inverse = create_inverse_brand_map(BRAND_STANDARD_MAP)
+        
+        #  Normalizar y mapear Brand (vectorizado y rápido)
+        df_final['Brand_Normalized'] = df_final["Brand"].str.upper().str.strip().str.replace(' ', '')
+        df_final['Brand'] = df_final['Brand_Normalized'].map(brand_map_inverse).fillna(df_final['Brand'])
+        df_final = df_final.drop(columns=['Brand_Normalized'])
 
-    # ASIGNACION DE BRAND GROUP (actualiza df_brand)
-    #df_brand['Brand'] = df_brand['Brand'].str.replace(' ', '').str.upper().str.strip() # Normalizar Brand del source
-    df_final = update_master_data(df_final, df_brand, 'Brand', ['Brand Group'])
-    
-    #  Columna calculada
-    df_final['Brand + SBU'] = df_final['Brand'] + '-' + df_final['GPP SBU']
-    
-    # --- CATEGORY GROUP, BIG ROCK, TOP CATEGORY (actualiza df_gpp por 'GPP')
-    lst_columns_gpp_cat=['Category Group','Big Rock','Top Category']
-    df_gpp['GPP_Key'] = df_gpp['GPP'].str.upper().str.strip().str.replace(' ', '')
-    df_gpp = df_gpp.drop(columns=['GPP'])
+        # ASIGNACION DE BRAND GROUP (actualiza df_brand)
+        #df_brand['Brand'] = df_brand['Brand'].str.replace(' ', '').str.upper().str.strip() # Normalizar Brand del source
+        df_final = update_master_data(df_final, df_brand, 'Brand', ['Brand Group'])
+        
+        #  Columna calculada
+        df_final['Brand + SBU'] = df_final['Brand'] + '-' + df_final['GPP SBU']
+        
+        # --- CATEGORY GROUP, BIG ROCK, TOP CATEGORY (actualiza df_gpp por 'GPP')
+        lst_columns_gpp_cat=['Category Group','Big Rock','Top Category']
+        df_gpp['GPP_Key'] = df_gpp['GPP'].str.upper().str.strip().str.replace(' ', '')
+        df_gpp = df_gpp.drop(columns=['GPP'])
 
 
-    df_final['GPP_Key'] = df_final['GPP'].str.upper().str.strip().str.replace(' ', '')
+        df_final['GPP_Key'] = df_final['GPP'].str.upper().str.strip().str.replace(' ', '')
 
-    df_final = update_master_data(df_final, df_gpp, 'GPP_Key', lst_columns_gpp_cat)
-    df_final = df_final.drop(columns=['GPP_Key'])
-    df_final =df_final[lst_col_md_product]
-    df_final=df_final.sort_values(by=['GPP','SKU Base','SKU','Brand','SKU Description'])
+        df_final = update_master_data(df_final, df_gpp, 'GPP_Key', lst_columns_gpp_cat)
+        df_final = df_final.drop(columns=['GPP_Key'])
+        df_final =df_final[lst_col_md_product]
+        df_final=df_final.sort_values(by=['GPP','SKU Base','SKU','Brand','SKU Description'])
 
-    # ---EXPORTACIÓN ---
-    df_final.to_excel(path_md_product, index=False)
-
+        # ---EXPORTACIÓN ---
+        df_final.to_excel(path_md_product, index=False)
+        print("Proceso de actualización de productos completado exitosamente.")
+        pass
+    except Exception as e:
+        print(f'Error en procesamiento de datos de Maestro de Productos: {e}')
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
-    print("Proceso de actualización de productos completado exitosamente.")

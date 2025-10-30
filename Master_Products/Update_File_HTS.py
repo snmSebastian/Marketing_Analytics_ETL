@@ -8,6 +8,8 @@ Genera el archivo de trabajo HTS para la revisión manual.
 
 import pandas as pd
 import numpy as np
+import sys
+
 
 
 def update_file_hts(md_product,lst_columns_hts,df_hts):
@@ -62,25 +64,29 @@ def main():
     Returns: None: La función orquesta el proceso y guarda el resultado en un archivo Excel (Workfile HTS).
     """
     print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: HTS UPDATE ETL ---")
+    print("---  INICIANDO PROCESO: HTS UPDATE ETL ---")
     print("=" * 55)
-    from config_paths import MasterProductsPaths
-    path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
-    path_hts=MasterProductsPaths.WORKFILE_HTS_FILE
-    
-    lst_columns_hts=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP SBU',
-       'GPP Division Code', 'GPP Division Description',
-       'GPP Category Description', 'GPP Portfolio Description', 'Big Rock',
-       'Top Category', 'NPI Project', 'Categoria HTS', 'Familia HTS',
-       'Sub Familia HTS', 'Clase HTS', 'NPI Project HTS',
-       'Posicionamiento HTS']
-    df_hts=pd.read_excel(path_hts, dtype=str, engine='openpyxl')
-    df_md_product=pd.read_excel(path_md_product, dtype=str, engine='openpyxl')
-    
-    df_filter_hts=update_file_hts(df_md_product,lst_columns_hts,df_hts)
-    df_filter_hts.to_excel(path_hts, index=False)
-    
+    try:
+        from config_paths import MasterProductsPaths
+        path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
+        path_hts=MasterProductsPaths.WORKFILE_HTS_FILE
+        
+        lst_columns_hts=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP SBU',
+        'GPP Division Code', 'GPP Division Description',
+        'GPP Category Description', 'GPP Portfolio Description', 'Big Rock',
+        'Top Category', 'NPI Project', 'Categoria HTS', 'Familia HTS',
+        'Sub Familia HTS', 'Clase HTS', 'NPI Project HTS',
+        'Posicionamiento HTS']
+        df_hts=pd.read_excel(path_hts, dtype=str, engine='openpyxl')
+        df_md_product=pd.read_excel(path_md_product, dtype=str, engine='openpyxl')
+        
+        df_filter_hts=update_file_hts(df_md_product,lst_columns_hts,df_hts)
+        df_filter_hts.to_excel(path_hts, index=False)
+        print("Proceso de actualización de productos completado exitosamente.")
+        pass
+    except Exception as e:
+        print(f'Error en procesamiento de datos de HTS: {e}')
+        sys.exit(1)
+
 if __name__ == "__main__":
     main()
-    print("Proceso de actualización de productos completado exitosamente.")
-
