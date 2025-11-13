@@ -24,7 +24,8 @@ def update_file_pwt(md_product,lst_columns_pwt,df_pwt):
     Returns: pd.DataFrame: DataFrame listo para exportar que contiene solo los SKUs PWT, incluyendo la columna 'check_sku' con el estado de
              verificación y la necesidad de revisión.
     """
-    df_filter_pwt=md_product[md_product['GPP SBU']=='PWT'][lst_columns_pwt].copy()
+    df_filter_pwt=md_product[((md_product['GPP SBU']=='PWT') | (md_product['GPP SBU']=='FAS')) &
+                             (md_product['Brand']=='Dewalt')][lst_columns_pwt].copy()
     mask_sku_md=df_filter_pwt['SKU'].isin(df_pwt['SKU'])
     df_filter_pwt['check_sku']=np.where(
                                 mask_sku_md, 

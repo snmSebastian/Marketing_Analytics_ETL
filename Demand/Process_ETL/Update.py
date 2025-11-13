@@ -31,8 +31,8 @@ def main():
     # --- CONFIGURACIÓN DE RUTAS ---
     try:
         from config_paths import DemandPaths
-        #demand_historic_processed_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
-        demand_historic_processed_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA
+        demand_historic_processed_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
+        #demand_historic_processed_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA
         
         demand_update_raw_dir = DemandPaths.INPUT_RAW_UPDATE_DIR
         country_code_file = DemandPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE

@@ -92,6 +92,30 @@ def process_columns(df_consolidated,lst_columns):
                 print(f"Error: La columna {e} no se encontró en los archivos. ")
     return df_processed
 
+def assign_local_currency(df_consolidated,df_fx_rate):
+     df_consolidated['fk_YearMonthCountry']=(df_consolidated['fk_year_month'] + '-' +
+                                                            df_consolidated['fk_Country'])
+     df_consolidated['fk_YearMonthCountry']=df_consolidated['fk_YearMonthCountry'].str.upper().str.strip()
+     df_fx_rate['fk_YearMonthCountry']=(df_fx_rate['Year']+'-'+
+                                        df_fx_rate['Month']+'-'+
+                                        df_fx_rate['Country'])
+     df_fx_rate['fk_YearMonthCountry']=df_fx_rate['fk_YearMonthCountry'].str.upper().str.strip()
+     df_consolidated=pd.merge(
+          df_consolidated,
+          df_fx_rate[['fk_YearMonthCountry','OP Rate']],
+          on='fk_YearMonthCountry',
+          how='left')
+     df_consolidated['OP Rate']=df_consolidated['OP Rate'].astype(float)
+     df_consolidated['Demand History & Forecast-GSV']=df_consolidated['Demand History & Forecast-GSV'].astype(float)
+     df_consolidated['OP Rate']=df_consolidated['OP Rate'].fillna(0)
+     df_consolidated['Demand History & Forecast-GSV']=df_consolidated['Demand History & Forecast-GSV'].fillna(0)
+
+     df_consolidated['Demand $ Local Currency']=df_consolidated['Demand History & Forecast-GSV']*df_consolidated['OP Rate']
+     cols_to_drop = ['fk_YearMonthCountry','OP Rate']
+     df_consolidated.drop(columns=[col for col in cols_to_drop if col in df_consolidated.columns], inplace=True)
+     return df_consolidated    
+
+
 # Función principal que ejecuta el script.
 # Esta función no recibe parámetros y no devuelve ningún valor.
 def main():
@@ -109,11 +133,17 @@ def main():
     historic_raw_dir = DemandPaths.INPUT_RAW_HISTORIC_DIR
     country_code_file = DemandPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
     processed_parquet_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
+    fx_rate=DemandPaths.INPUT_PROCESSED_FX_RATE_FILE
+     #===============================
+    # --- Lectura de archivos 
+    #===============================
     # Leer los archivos de datos históricos y consolidarlos en un DataFrame.
     df_consolidated = read_files(historic_raw_dir)
     # Leer el archivo de códigos de país.
     df_country = pd.read_excel(country_code_file,
                                sheet_name='Code Country Demand', dtype=str, engine='openpyxl')
+    df_fx_rate = pd.read_excel(fx_rate, dtype=str, engine='openpyxl')
+
     # Definir las columnas relevantes para el procesamiento.    
     lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU',
                   'fk_date_country_clasification',
@@ -128,6 +158,10 @@ def main():
     lst_columns_float=['Demand History & Forecast-QTY', 'Shipment History& Forecast-Qty',
                   'Demand History & Forecast-GSV', 'Shipment History&Forecast-GSV']
     df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
+    #=========================================================
+    #--- ASIGNACIÓN COLUMNAS CALCULADAS
+    #=========================================================
+    df_consolidated=assign_local_currency(df_consolidated,df_fx_rate)
     
     # --- Agrupacion en archivos parquets
     group_parquet(df_processed, processed_parquet_dir,name='demand')

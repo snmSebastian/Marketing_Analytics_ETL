@@ -90,8 +90,8 @@ def main():
     try:
         # --- IMPORTAMOS ARCHIVOS ---
         from config_paths import FillRatePaths
-        fill_rate_historic_processed_dir = FillRatePaths.OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA #  PRUEBA
-        #fill_rate_historic_processed_dir = FillRatePaths.OUTPUT_PROCESSED_PARQUETS_DIR
+        #fill_rate_historic_processed_dir = FillRatePaths.OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA #  PRUEBA
+        fill_rate_historic_processed_dir = FillRatePaths.OUTPUT_PROCESSED_PARQUETS_DIR
         
         fill_rate_update_raw_dir = FillRatePaths.INPUT_RAW_UPDATE_DIR
         country_code_file = FillRatePaths.INPUT_PROCESSED_COUNTRY_CODES_FILE

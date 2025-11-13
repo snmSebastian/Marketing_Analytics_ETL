@@ -24,7 +24,11 @@ PATHS_CONFIG = {
     # --- RUTAS USADAS EN VARIOS PROYECTOS ---
     "Shared": {
         # Archivo específico
-        "Country_Codes": PROCESSED_DATAFLOW_DIR / 'Shared_Information_for_Projects' / 'Country' / 'Region_Country_codes.xlsx'
+        "Country_Codes": PROCESSED_DATAFLOW_DIR / 'Shared_Information_for_Projects' / 'Country' / 'Region_Country_codes.xlsx',
+        "Gross_to_Net":PROCESSED_DATAFLOW_DIR / 'Shared_Information_for_Projects' / 'Gross_to_Net'/'Gross_to_Net.xlsx',
+        "NPI":PROCESSED_DATAFLOW_DIR / 'Shared_Information_for_Projects' / 'NPI'/'NPI.xlsx',
+        "fx_rate":PROCESSED_DATAFLOW_DIR / 'Shared_Information_for_Projects' / 'FX_Rate'/'FX_Rate.xlsx',
+        "Table_for_filter_NPI":PROCESSED_DATAFLOW_DIR / 'Shared_Information_for_Projects' / 'NPI'/'Table_for_filter_NPI.xlsx'
     },
     
     # --- PROCESO ETL: DEMAND ---
@@ -55,7 +59,7 @@ PATHS_CONFIG = {
     "Sales": {
         "Raw": {
             "Historic": RAW_DATA_DIR / 'Sales' / 'Historic',
-            "Mothly_Update": RAW_DATA_DIR / 'Sales' / 'Mothly_Update'
+            "Mothly_Update": RAW_DATA_DIR / 'Sales' / 'Mothly_Update'            
         },
         "Processed": {
             "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Sales',
@@ -111,6 +115,12 @@ class DemandPaths:
     INPUT_RAW_HISTORIC_DIR: Path = PATHS_CONFIG['Demand']['Raw']['Historic']
     INPUT_RAW_UPDATE_DIR: Path = PATHS_CONFIG['Demand']['Raw']['Mothly_Update']
     INPUT_PROCESSED_COUNTRY_CODES_FILE: Path = PATHS_CONFIG['Shared']['Country_Codes']
+    INPUT_PROCESSED_GROSS_TO_NET_FILE: Path = PATHS_CONFIG['Shared']['Gross_to_Net']
+    INPUT_PROCESSED_NPI_FILE: Path = PATHS_CONFIG['Shared']['NPI']
+    INPUT_PROCESSED_FILTER_NPI_FILE: Path = PATHS_CONFIG['Shared']['Table_for_filter_NPI']
+    INPUT_PROCESSED_MASTER_PRODUCTS_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['Master_Product']
+    INPUT_PROCESSED_FX_RATE_FILE: Path = PATHS_CONFIG['Shared']['fx_rate']
+
     #___________________
     # --- OUTPUTS ------
     #___________________
@@ -147,6 +157,11 @@ class SalesPaths:
     INPUT_RAW_HISTORIC_DIR: Path = PATHS_CONFIG['Sales']['Raw']['Historic']
     INPUT_RAW_UPDATE_DIR: Path = PATHS_CONFIG['Sales']['Raw']['Mothly_Update']
     INPUT_PROCESSED_COUNTRY_CODES_FILE: Path = PATHS_CONFIG['Shared']['Country_Codes']
+    INPUT_PROCESSED_GROSS_TO_NET_FILE: Path = PATHS_CONFIG['Shared']['Gross_to_Net']
+    INPUT_PROCESSED_NPI_FILE: Path = PATHS_CONFIG['Shared']['NPI']
+    INPUT_PROCESSED_FILTER_NPI_FILE: Path = PATHS_CONFIG['Shared']['Table_for_filter_NPI']
+    INPUT_PROCESSED_MASTER_PRODUCTS_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['Master_Product']
+
     #___________________
     # --- OUTPUTS -------
     #___________________

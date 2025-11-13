@@ -17,10 +17,12 @@ Contiene las siguientes funciones:
 #--------------------------------------------------
 # Liberia
 import pandas as pd
+import numpy as np
 
 # Permite buscar y recuperar una lista de nombres de archivos que coinciden con un patrón específico.
 import glob
 import os
+
 
 # Lectura de archivos
 def read_files(input_path):
@@ -98,12 +100,6 @@ def asign_country_code(df_consolidated, df_country):
 
         return df_consolidated
 
-import pandas as pd
-import numpy as np
-
-import pandas as pd
-
-
 def process_columns(df_consolidated,lst_columns):
     """    
         Renombra, calcula columnas clave ('fk_year_month', 'clasification', 'fk_date_country_customer_clasification',
@@ -170,7 +166,8 @@ def format_columns(df: pd.DataFrame, lst_columns_str: list, lst_columns_float: l
     - Los errores en float se convierten a NaN y luego a 0.
     - Los valores NaN/nulos/errores en str se convierten a la cadena vacía "".
     """
-    
+    df=df.copy()
+    df=df[lst_columns_str+lst_columns_float]
     # 1. CONVERSIÓN Y LIMPIEZA DE CADENAS (STR)
     for col in lst_columns_str:
         # 1.1. Convertir a str
