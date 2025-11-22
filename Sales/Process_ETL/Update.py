@@ -72,7 +72,7 @@ def main():
         df_update=assign_nsv(df_update,df_md_product,df_gross_to_net)
         df_update=assign_selling_unit_price(df_update)
         df_update=assign_NPI_New_Carryover(df_update,df_npi)
-        df_update=LaunchYear_VR(df_update,df_npi)
+        df_update=LaunchYear_VR(df_update,df_npi,df_country)
         df_update=assign_num_batteries(df_update,df_md_product)
         df_update=assign_NSV_NPI_w_Combo(df_update,df_filter_npi)
         
@@ -88,7 +88,8 @@ def main():
         #====================================
         lst_columns_srt = ['fk_Date','fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code', 'fk_SKU',
                     'fk_date_country_customer_clasification',
-                    'New New/Carryover','VR','Launch Year']
+                    'New New/Carryover',
+                    'VR %','Launch Year']
         lst_columns_float = ['Total Sales', 'Total Cost', 'Units Sold',
                             'NSV','Selling Unit Price',
                             'NPI Incremental Sales $',

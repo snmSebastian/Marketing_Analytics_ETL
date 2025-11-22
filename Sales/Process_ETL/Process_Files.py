@@ -158,7 +158,7 @@ def assign_selling_unit_price(df_processed):
     
     return df_processed
     
-def assign_NPI_New_Carryover(df_processed,df_npi):
+def assign_NPI_New_Carryover(df_processed,df_npi,df_country):
     """
     Asigna las clasificaciones de Nuevos Productos (NPI) e información incremental.
     
@@ -175,13 +175,38 @@ def assign_NPI_New_Carryover(df_processed,df_npi):
         pd.DataFrame: El DataFrame modificado con las columnas 'New New/Carryover', 
                       'Incremental %', y 'NPI Incremental Sales $'.
     """
+    #Elimina duplicados en df_npi
+    df_country['CountryRegion']=df_country['Country']+'-'+df_country['Region']
+    df_country['CountryRegion']=df_country['CountryRegion'].str.upper().str.strip()
+    df_country = df_country.drop_duplicates(subset=['CountryRegion'], keep='first')
+    # Asignacion de la region segun pais
+    df_processed=pd.merge(
+        df_processed,
+        df_country[['Country','Region']],
+        how='left',
+        left_on='fk_Country',
+        right_on='Country',
+    )
+    
+    # Para aquellos paises de cca y pub, su pais asignado es la region
+    condiciones=[
+        df_processed['Region'].isin(['CCA','PUB']),
+    ]
+    valores=[
+        df_processed['Region']
+    ]
+    df_processed['fk_CountryRegion'] = np.select(condiciones, valores, default=df_processed['fk_Country'])
+
+    # llave para cruzar ventas con npi
     df_processed['fk_NPI'] = (df_processed['fk_year_month'].astype(str) + '-'+
-                             df_processed['fk_Country'] + '-'+
+                             df_processed['fk_CountryRegion'] + '-'+
                              df_processed['fk_SKU'])
     df_processed['fk_NPI'] = df_processed['fk_NPI'].str.upper().str.strip()
+    #clave para cruzar sales con npi
     df_npi=df_npi.copy()
     df_npi['fk_YearMonthCountrySku']=df_npi['fk_YearMonthCountrySku'].str.upper().str.strip()
     
+    #cruce para obtener New New/Carryover y Incremental %
     df_processed=pd.merge(
         df_processed,
         df_npi[['fk_YearMonthCountrySku','New New/Carryover','Incremental %']],
@@ -196,56 +221,91 @@ def assign_NPI_New_Carryover(df_processed,df_npi):
     df_processed['Incremental %']=df_processed['Incremental %'].fillna(0)
     df_processed['Incremental %'] = df_processed['Incremental %'].astype(float)
     df_processed['NPI Incremental Sales $']=df_processed['NSV']*df_processed['Incremental %']
-    cols_to_drop = ['fk_YearMonthCountrySku','Incremental %','fk_NPI']
+    cols_to_drop = ['fk_YearMonthRegionySku','Incremental %','fk_NPI','Country','Region']
     df_processed.drop(columns=[col for col in cols_to_drop if col in df_processed.columns], inplace=True)
     
     return df_processed
 
-def LaunchYear_VR(df_processed,df_npi):
+def LaunchYear_VR(df_processed,df_npi,df_country):
     """
-    Clasifica cada registro como 'VR%' (NPI "New New") o 'Core' y asigna 
-    el año de lanzamiento (Launch Year) del producto.
-
+    Asigna clasificación de 'Launch Year' y 'VR %' al DataFrame principal mediante cruces Left Join:
+    1. Cruce con Country para obtener la Región.
+    2. Cruce con Maestro NPI usando llave compuesta (Año-Región-SKU) para coincidencia estricta.
+    
     Args:
-        df_processed (pd.DataFrame): DataFrame principal (ventas/demanda).
-        df_npi (pd.DataFrame): Tabla de referencia de Nuevos Productos (NPI).
-
+        df_processed (pd.DataFrame): DataFrame principal con 'fk_year_month', 'fk_Country', 'fk_SKU'.
+        df_npi (pd.DataFrame): Maestro de NPI filtrado por 'New New'.
+        df_country (pd.DataFrame): Maestro de Países.
+    
     Returns:
-        pd.DataFrame: DataFrame modificado con las columnas 'VR' y 'Launch Year'.
+        pd.DataFrame: DataFrame original con columnas 'VR %' y 'Launch Year'.
     """
-    df_npi_new_new=df_npi[df_npi['New New/Carryover']=='New New'].copy()
-    df_npi_new_new['fk_YearCountrySku']=(df_npi_new_new['Fiscal Year']+'-'+
-                                         df_npi_new_new['Country']+'-'+
-                                         df_npi_new_new['SKU'])
-    df_npi_new_new['fk_YearCountrySku']=df_npi_new_new['fk_YearCountrySku'].str.upper().str.strip()
-
-    df_processed['fk_YearCountrySku']=(df_processed['fk_year_month'].str[:4]+'-'+
-                                       df_processed['fk_Country']+'-'+
-                                       df_processed['fk_SKU'])
-    df_processed['fk_YearCountrySku']=df_processed['fk_YearCountrySku'].str.upper().str.strip()
-
-    df_processed['year']=df_processed['fk_year_month'].str[:4]
-    df_processed['Launch Year']=""
-    
-    es_npi_new_new = df_processed['fk_YearCountrySku'].isin(df_npi_new_new['fk_YearCountrySku'])
-
-    df_processed['VR'] = np.where(
-    es_npi_new_new, 
-    "VR%", 
-    "Core"
+    # año des, para determinar el rango de NPI
+    start_year = 2021
+    valid_years = list(range(start_year, start_year + 7)) # [2021, ..., 2027]
+    #filtra npi para obtener solo los nuevos productos de los ultimos 3 años
+    mask_npi = (
+        (df_npi['New New/Carryover'] == 'New New') & 
+        (df_npi['Fiscal Year'].astype(int).isin(valid_years))
     )
+    df_npi_new = df_npi[mask_npi].copy()
+    df_npi_new.rename(columns={'Fiscal Year':'Launch Year'}, inplace=True)
+    print(df_npi_new.columns)
+    df_npi_new=df_npi_new[['Launch Year','Region','SKU']]
+    df_npi_new.drop_duplicates(subset=['Launch Year','Region','SKU'], inplace=True)
+
+    #cre las llaves para cruzar ventas con npi
+    df_npi_new['fk_YearRegionSku']=(df_npi_new['Launch Year']+'-'+
+                                     df_npi_new['Region']+'-'+
+                                     df_npi_new['SKU'])
     
+    df_npi_new['fk_YearRegionSku']=df_npi_new['fk_YearRegionSku'].str.upper().str.strip()
+    
+
+    #Elimina duplicados en df_country
+    df_country['CountryRegion']=df_country['Country']+'-'+df_country['Region']
+    df_country['CountryRegion']=df_country['CountryRegion'].str.upper().str.strip()
+    df_country = df_country.drop_duplicates(subset=['CountryRegion'], keep='first')
+   
+    # Asignacion de la region segun pais
+    df_processed=pd.merge(
+        df_processed,
+        df_country[['Country','Region']],
+        how='left',
+        left_on='fk_Country',
+        right_on='Country'
+    )
+    # fk para saber si es un nuevo producto en algunos de los 3 años de interes
+    df_processed['fk_year']=df_processed['fk_year_month'].str[:4]
+    df_processed['fk_YearRegionSku']=(df_processed['fk_year']+'-'+
+                                   df_processed['Region']+'-'+
+                                   df_processed['fk_SKU'])
+    
+    # fk con los años de interes
+    df_processed=pd.merge(
+        df_processed,
+        df_npi_new[['fk_YearRegionSku','Launch Year']],
+        how='left',
+        on='fk_YearRegionSku'
+    )
+    mask_valid_VR = df_processed['Launch Year'].fillna('').astype(str).str.isnumeric()
+    
+    df_processed['VR %'] = np.where(
+        mask_valid_VR,
+        "VR %",
+        ""
+    )
     df_processed['Launch Year'] = np.where(
-    es_npi_new_new, 
-    'NPI'+df_processed['year'], 
-    "Core"
+        mask_valid_VR,
+        'NPI'+df_processed['fk_year'],
+        "Core"
     )
-
-    cols_to_drop = ['fk_YearCountrySku','year']
+    #columnas a eliminar
+    cols_to_drop = ['fk_YearRegionSku']
     df_processed.drop(columns=[col for col in cols_to_drop if col in df_processed.columns], inplace=True)
     
     return df_processed
-    
+
 def assign_num_batteries(df_processed,df_md_product):
     """
     Asigna la cantidad de baterías por SKU y calcula el total de baterías vendidas.
@@ -325,6 +385,8 @@ def assign_NSV_NPI_w_Combo(df_processed,df_filter_npi):
     
     return df_processed
 
+
+
 def main():
     """
     Función principal que orquesta el flujo ETL completo para los datos de Ventas (Sales).
@@ -338,8 +400,9 @@ def main():
     # --- CONFIGURACIÓN DE RUTAS ---
     # Importamos las rutas
     from config_paths import SalesPaths
-    sales_historic_raw_dir = SalesPaths.INPUT_RAW_HISTORIC_DIR
-    #sales_historic_raw_dir=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Historic\prueba'
+    #sales_historic_raw_dir = SalesPaths.INPUT_RAW_HISTORIC_DIR
+    sales_historic_raw_dir=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Historic\prueba'
+    
     country_code_file = SalesPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
     processed_gross_to_net=SalesPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
     npi=SalesPaths.INPUT_PROCESSED_NPI_FILE
@@ -350,10 +413,10 @@ def main():
     # --- Lectura de archivos 
     #===============================
     df_consolidated = read_files(sales_historic_raw_dir)
+    print(f'longitud archivos leidos: {len(df_consolidated)}')
     # Leer el archivo de códigos de país.
     df_country = pd.read_excel(country_code_file,
                                sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
-    
     df_md_product=pd.read_excel(md_product_processed_file,dtype=str, engine='openpyxl')
     df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
     df_npi=pd.read_excel(npi,dtype=str, engine='openpyxl')
@@ -364,33 +427,39 @@ def main():
                    'fk_date_country_customer_clasification',
                    'Total Sales', 'Total Cost', 'Units Sold']
     df_consolidated = asign_country_code(df_consolidated, df_country)
+    print(f'longitud archivo luego de asignar codigos de pais: {len(df_consolidated)}')
+    print(df_consolidated['fk_Country'].unique())
+    
     df_processed=process_columns(df_consolidated,lst_columns)
+    print(f'longitud archivo luego de procesar columnas: {len(df_processed)}')
     #=========================================================
     #--- ASIGNACIÓN COLUMNAS CALCULADAS
     #=========================================================
     df_processed=assign_nsv(df_processed,df_md_product,df_gross_to_net)
     df_processed=assign_selling_unit_price(df_processed)
-    df_processed=assign_NPI_New_Carryover(df_processed,df_npi)
-    df_processed=LaunchYear_VR(df_processed,df_npi)
+    df_processed=assign_NPI_New_Carryover(df_processed,df_npi,df_country)
+    df_processed=LaunchYear_VR(df_processed,df_npi,df_country)   
     df_processed=assign_num_batteries(df_processed,df_md_product)
-    df_processed=assign_NSV_NPI_w_Combo(df_processed,df_filter_npi)
+    df_processed=assign_NSV_NPI_w_Combo(df_processed,df_filter_npi)    
     
     #====================================
     # --- Formato de columnas ---
     #====================================
     lst_columns_srt = ['fk_Date','fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code', 'fk_SKU',
                    'fk_date_country_customer_clasification',
-                   'New New/Carryover','VR','Launch Year']
+                   'New New/Carryover',
+                   'Launch Year','VR %']
     lst_columns_float = ['Total Sales', 'Total Cost', 'Units Sold',
                          'NSV','Selling Unit Price',
                          'NPI Incremental Sales $',
                          'Num Batteries Sales',
-                         'Net Sales NPI w/Combo']
+                         'Net Sales NPI w/Combo'
+                         ]
     df_processed=format_columns(df_processed,lst_columns_srt,lst_columns_float)
     
     #  --- ESCRITURA DE ARCHIVOS PARQUET SEGMENTADOS --
-    group_parquet(df_processed, processed_parquet_dir,name='sales')
-    #group_parquet(df_processed, sales_historic_raw_dir,name='sales')
+    #group_parquet(df_processed, processed_parquet_dir,name='sales')
+    group_parquet(df_processed, sales_historic_raw_dir,name='sales')
 
 
 # --- EJECUCION DEL SCRIPT ---

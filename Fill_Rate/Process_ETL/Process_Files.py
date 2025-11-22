@@ -186,9 +186,9 @@ def format_columns(df: pd.DataFrame, lst_columns_str: list, lst_columns_float: l
     for col in lst_columns_float:
         # 2.1. Conversión con manejo de errores (errors='coerce' -> errores a NaN)
         df[col] = pd.to_numeric(df[col], errors='coerce')
-        
+        df[col]=df[col].fillna(np.nan)  # Asegurar que los NaN se manejen correctamente
         # 2.2. Reemplazar NaN (errores de conversión) por 0, y asegurar dtype float
-        df[col] = df[col].fillna(0).astype(float)
+        df[col] = df[col].fillna(0).astype(np.float32)
         
     return df
 
