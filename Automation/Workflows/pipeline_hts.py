@@ -134,7 +134,7 @@ def main():
 
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
         <b>Sebastian Nuñez.</b><br>
-        Data Science & Data Base Analyst.<br>
+        Data Scientist & Data Base Analyst.<br>
         Stanley Black & Decker, Inc.
         </p>
     </body>

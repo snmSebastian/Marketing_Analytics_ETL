@@ -98,7 +98,7 @@ def main():
     BODY_TEMPLATE_EXITO = f"""
     <html>
     <body>
-        <h2 style="color: green;">✅ Archivo HTS Actualizado y Listo para Revisión</h2>
+        <h2 style="color: green;">✅ Archivo Md Products Actualizado</h2>
         <p>Hola,</p>
         <p> El archivo de <b>MD PRODUCTS</b> ha sido actualizado con la información más reciente: new sku revisados, informacion de hts y informacion de pwt.</p>
         
@@ -115,7 +115,7 @@ def main():
 
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
         <b>Sebastian Nuñez.</b><br>
-        Data Science & Data Base Analyst.<br>
+        Data Scientist & Data Base Analyst.<br>
         Stanley Black & Decker, Inc.
         </p>
     </body>

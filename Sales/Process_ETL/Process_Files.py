@@ -75,7 +75,7 @@ def assign_nsv(df_processed, df_md_product, df_gross_to_net):
     df_md_product=df_md_product.copy()
     df_md_product.rename(columns={'SKU':'SKU_x', 'Brand':'Brand_x', 'GPP SBU':'GPP SBU_x'}, inplace=True)
     df_md_product['SKU_x'] = df_md_product['SKU_x'].astype(str).str.upper().str.strip()
-
+    df_md_product.drop_duplicates(subset=['SKU_x'], inplace=True)
     # Aplicar estandarización a la clave de cruce del DataFrame principal
     df_processed['fk_SKU'] = df_processed['fk_SKU'].astype(str).str.upper().str.strip()
 
@@ -102,6 +102,7 @@ def assign_nsv(df_processed, df_md_product, df_gross_to_net):
                                    df_gross_to_net['Country_y'] + 
                                    df_gross_to_net['Brand_y'] + 
                                    df_gross_to_net['SBU_y'])
+    df_gross_to_net.drop_duplicates(subset=['fk_g2n_y'], inplace=True)
     
     df_processed['fk_g2n'] = df_processed['fk_g2n'].str.upper().str.strip()
     df_gross_to_net['fk_g2n_y'] = df_gross_to_net['fk_g2n_y'].str.upper().str.strip()
@@ -250,7 +251,6 @@ def LaunchYear_VR(df_processed,df_npi,df_country):
     )
     df_npi_new = df_npi[mask_npi].copy()
     df_npi_new.rename(columns={'Fiscal Year':'Launch Year'}, inplace=True)
-    print(df_npi_new.columns)
     df_npi_new=df_npi_new[['Launch Year','Region','SKU']]
     df_npi_new.drop_duplicates(subset=['Launch Year','Region','SKU'], inplace=True)
 
@@ -400,8 +400,8 @@ def main():
     # --- CONFIGURACIÓN DE RUTAS ---
     # Importamos las rutas
     from config_paths import SalesPaths
-    #sales_historic_raw_dir = SalesPaths.INPUT_RAW_HISTORIC_DIR
-    sales_historic_raw_dir=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Historic\prueba'
+    sales_historic_raw_dir = SalesPaths.INPUT_RAW_HISTORIC_DIR
+    #sales_historic_raw_dir=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Historic\prueba'
     
     country_code_file = SalesPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
     processed_gross_to_net=SalesPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
@@ -427,21 +427,32 @@ def main():
                    'fk_date_country_customer_clasification',
                    'Total Sales', 'Total Cost', 'Units Sold']
     df_consolidated = asign_country_code(df_consolidated, df_country)
-    print(f'longitud archivo luego de asignar codigos de pais: {len(df_consolidated)}')
-    print(df_consolidated['fk_Country'].unique())
     
     df_processed=process_columns(df_consolidated,lst_columns)
-    print(f'longitud archivo luego de procesar columnas: {len(df_processed)}')
+    print(f'longitud df dataset procesado: {len(df_processed)}')
     #=========================================================
     #--- ASIGNACIÓN COLUMNAS CALCULADAS
     #=========================================================
     df_processed=assign_nsv(df_processed,df_md_product,df_gross_to_net)
+    print(f'longitud posterior a asignación NSV: {len(df_processed)}')
     df_processed=assign_selling_unit_price(df_processed)
+    print(f'longitud posterior a asignación Selling Unit Price: {len(df_processed)}')
     df_processed=assign_NPI_New_Carryover(df_processed,df_npi,df_country)
-    df_processed=LaunchYear_VR(df_processed,df_npi,df_country)   
+    print(f'longitud posterior a asignación NPI: {len(df_processed)}')
+    df_processed=LaunchYear_VR(df_processed,df_npi,df_country)
+    print(f'longitud dataset procesado con LaunchYear_VR: {len(df_processed)}')   
     df_processed=assign_num_batteries(df_processed,df_md_product)
-    df_processed=assign_NSV_NPI_w_Combo(df_processed,df_filter_npi)    
-    
+    df_processed=assign_NSV_NPI_w_Combo(df_processed,df_filter_npi)
+    if len(df_processed) == len(df_consolidated):
+        print("El DataFrame procesado tiene la misma longitud que el DataFrame original.")
+       
+    else:
+        print("La longitud del DataFrame procesado no coincide con la del DataFrame original.")
+        print(f'longitud dataset crudo ñ{len(df_consolidated)}')
+        print(f'longitud dataset procesado: {len(df_processed)}')
+        print(f'diferencia: {len(df_consolidated)-len(df_processed)}')
+        print(f'Porcentaje de diferencia: {(len(df_consolidated)-len(df_processed))/len(df_consolidated)*100:.2f}%')
+        print(f'longitud npi path 2025: 2444 2024:1321' )
     #====================================
     # --- Formato de columnas ---
     #====================================
@@ -458,8 +469,8 @@ def main():
     df_processed=format_columns(df_processed,lst_columns_srt,lst_columns_float)
     
     #  --- ESCRITURA DE ARCHIVOS PARQUET SEGMENTADOS --
-    #group_parquet(df_processed, processed_parquet_dir,name='sales')
-    group_parquet(df_processed, sales_historic_raw_dir,name='sales')
+    group_parquet(df_processed, processed_parquet_dir,name='sales')
+    #group_parquet(df_processed, sales_historic_raw_dir,name='sales')
 
 
 # --- EJECUCION DEL SCRIPT ---

@@ -45,8 +45,8 @@ def main():
     # Nombre del MÓDULO ETL que queremos ejecutar (NO la ruta del archivo)
     # Corresponde a Master_Products/Update_md_products.py
     
-    #modulo_products = 'Master_Products.Update_md_products' 
-    modulo_sku_review='Master_Products.Generate_sku_review'
+    modulo_products = 'Master_Products.Update_md_products' 
+    #modulo_sku_review='Master_Products.Generate_sku_review'
     #modulo_hts='Master_Products.Update_File_HTS'
     #modulo_pwt='Master_Products.Update_File_PWT'
     modulo_customers='Master_Customers.Update'
@@ -61,10 +61,10 @@ def main():
         "Sales Update": modulo_sales,
         "Master Customers Update": modulo_customers,
 
-        #"Master Products Update": modulo_products,
+        "Master Products Update": modulo_products,
         #"HTS Update": modulo_hts,
         #"PWT Update": modulo_pwt,
-        "SKU Review Generation": modulo_sku_review
+        #"SKU Review Generation": modulo_sku_review
 
     }
     
@@ -111,32 +111,15 @@ def main():
             <li>Sales</li>
             <li>Fill Rate</li>
             <li>Master Customers</li>
-        </ul>
+            <li>Master Products</li>
 
-        <h3>2. Revisión de SKUs (Acción Manual)</h3>
-        <p>El archivo <b>Sku_for_Review.xlsx</b> ha sido generado y actualizado en SharePoint con los siguientes criterios:</p>
-        <ul>
-            <li><b>Nuevos SKUs</b> (Para categorización inicial).</li>
-            <li><b>SKUs existentes</b> que requieren revisión porque su SKU base comparte diferentes categorías.</li>
-            <li><b>SKUs aleatorios</b> por revisar (Mantenimiento de calidad).</li>
         </ul>
-        
-        <p style="font-weight: bold; color: #cc0000; margin-top: 15px;">
-            ⚠️ Acción Requerida: Marcar en la columna <b>"check_sku"</b> con <b>'OK'</b> los SKUs que ya hayan sido revisados.
-        </p>
-
-        <p style="margin-top: 20px;">Accede al archivo a través del siguiente enlace:</p>
-        <p style="font-size: 1.2em;">
-            <a href="https://ecentral.sharepoint.com/:x:/r/sites/GTS_Marketing/LAG-IPGPDR/_layouts/15/Doc.aspx?sourcedoc=%7B956C36AE-F7E5-4F48-9C6E-FD516560DBDA%7D&file=Sku_for_Review.xlsx&action=default&mobileredirect=true" target="_blank">
-                🔗 Abrir Sku_for_Review.xlsx
-            </a>
-        </p>
 
         <p style="margin-top: 30px;">Saludos,</p>
         
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
             <b>Sebastian Nuñez.</b><br>
-            Data Science & Data Base Analyst.<br>
+            Data Scientist & Data Base Analyst.<br>
             Stanley Black & Decker, Inc.
         </p>
     </body>
@@ -150,7 +133,7 @@ def main():
         <p>El proceso ETL falló. Se detectaron <b>{{num_fallidos}} errores</b> de un total de <b>{{total_modulos}} módulos</b>. Se requiere revisión inmediata.</p>
         
         <p style="font-weight: bold; color: red; margin-top: 15px;">
-            🚫 Proceso Detenido: Hasta que el problema se solucione, la <b>actualización de los Dataflows</b> de Demand, Sales, Fill Rate y Master Customers ha sido <b>paralizada</b> para evitar inyectar datos corruptos.
+            🚫 Proceso Detenido: Hasta que el problema se solucione, la <b>actualización de los Dataflows</b> de Demand, Sales, Fill Rate, Master Customers  y Master Products ha sido <b>paralizada</b> para evitar inyectar datos corruptos.
         </p>
         
         <hr style="border: 1px solid #ccc;">

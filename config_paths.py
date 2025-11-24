@@ -38,8 +38,7 @@ PATHS_CONFIG = {
             "Mothly_Update": RAW_DATA_DIR / 'Demand' / 'Mothly_Update'
         },
         "Processed": {
-            "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Demand',
-            "OUTPUT_DIR_PROCESSED_PARQUETS_Prueba": PROCESSED_DATAFLOW_DIR / 'Demand' / 'prueba'
+            "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Demand'
             }
     },
     
@@ -50,8 +49,7 @@ PATHS_CONFIG = {
             "Mothly_Update": RAW_DATA_DIR / 'Fill Rate' / 'Mothly_Update'
         },
         "Processed": {
-            "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Fill_Rate',
-            "OUTPUT_DIR_PROCESSED_PARQUETS_Prueba": PROCESSED_DATAFLOW_DIR / 'Fill_Rate' / 'prueba'
+            "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Fill_Rate'
         }
     },
     
@@ -62,9 +60,7 @@ PATHS_CONFIG = {
             "Mothly_Update": RAW_DATA_DIR / 'Sales' / 'Mothly_Update'            
         },
         "Processed": {
-            "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Sales',
-            "OUTPUT_DIR_PROCESSED_PARQUETS_Prueba": PROCESSED_DATAFLOW_DIR / 'Sales' / 'prueba'
-            
+            "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Sales'            
         }
     },
 
@@ -76,16 +72,15 @@ PATHS_CONFIG = {
         },
         "Processed": {
             "Classification_Customers": PROCESSED_DATAFLOW_DIR / 'Master_Customers' / 'Classifications_Customers.xlsx',
-            "Master_Customers": PROCESSED_DATAFLOW_DIR / 'Master_Customers' / 'Master_Customers.xlsx',
-            "Master_Customers_Prueba": PROCESSED_DATAFLOW_DIR / 'Master_Customers' / 'Master_Customers_Prueba.xlsx'
-        }
+            "Master_Customers": PROCESSED_DATAFLOW_DIR / 'Master_Customers' / 'Master_Customers.xlsx'
+       }
     },
     
     # --- MASTER DATA: PRODUCTS ---
     "Master_Products": {
         "Raw": {
             "Sku_for_Review": RAW_DATA_DIR / 'Products' / 'Sku_for_Review.xlsx',
-            "sku_shared_of_PSD": RAW_DATA_DIR / 'Products' / 'sku_shared_of_PSD.xlsx',
+            "sku_shared_of_PSD": RAW_DATA_DIR / 'Products' /'other'/ 'sku_shared_of_PSD.xlsx',
             "Sku_for_Review": RAW_DATA_DIR / 'Products' / 'Sku_for_Review.xlsx',
             "hts_products": RAW_DATA_DIR / 'Products' / 'working_files_for_pwt_hts_products'/'HTS_Classification_Workfile.xlsx',
             "pwt_products": RAW_DATA_DIR / 'Products' / 'working_files_for_pwt_hts_products'/'PWT_Classification_Workfile.xlsx'
@@ -125,7 +120,6 @@ class DemandPaths:
     # --- OUTPUTS ------
     #___________________
     OUTPUT_PROCESSED_PARQUETS_DIR: Path = PATHS_CONFIG['Demand']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS']
-    OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA: Path = PATHS_CONFIG['Demand']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS_Prueba']
     
 DEMAND_PATHS = DemandPaths()
 
@@ -143,7 +137,6 @@ class FillRatePaths:
     # --- OUTPUTS ------
     #___________________
     OUTPUT_PROCESSED_PARQUETS_DIR: Path = PATHS_CONFIG['FillRate']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS']
-    OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA: Path = PATHS_CONFIG['FillRate']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS_Prueba']
     
 FILLRATE_PATHS = FillRatePaths()
 
@@ -166,7 +159,6 @@ class SalesPaths:
     # --- OUTPUTS -------
     #___________________
     OUTPUT_PROCESSED_PARQUETS_DIR: Path = PATHS_CONFIG['Sales']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS']
-    OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA: Path = PATHS_CONFIG['Sales']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS_Prueba']
     
 SALES_PATHS = SalesPaths()
 
@@ -187,7 +179,6 @@ class MasterCustomersPaths:
     # --- OUTPUTS -------
     #___________________
     OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE: Path = PATHS_CONFIG['Master_Customers']['Processed']['Master_Customers']
-    OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE_PRUEBA: Path = PATHS_CONFIG['Master_Customers']['Processed']['Master_Customers_Prueba']
     
 MASTER_CUSTOMERS_PATHS = MasterCustomersPaths()
 
@@ -212,7 +203,6 @@ class MasterProductsPaths:
     WORKFILE_PWT_FILE:Path=PATHS_CONFIG['Master_Products']['Raw']['pwt_products']
 
     OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['Master_Product']
-    OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA: Path = PATHS_CONFIG['Master_Products']['Processed']['Master_Product_Prueba']
     
     
 MASTER_PRODUCTS_PATHS = MasterProductsPaths()
