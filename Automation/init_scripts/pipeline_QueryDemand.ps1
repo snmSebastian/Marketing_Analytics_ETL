@@ -16,8 +16,9 @@ cmd /c "chcp 65001" | Out-Null # Asegura que la consola subyacente use UTF-8
 
 # ---  EJECUTAR EL PIPELINE DIRECTAMENTE CON EL BINARIO DEL VENV ---
 Write-Host "Iniciando pipeline modular con el interprete de VENV..."
+
 # ...
-& $PythonExe -m Automation.Workflows.pipeline_pwt
+& $PythonExe -m Automation.Workflows.pipeline_QueryDemand
 # --- 5. Manejo de Errores ---
 # $LASTEXITCODE captura el código de retorno (0 para éxito) del último proceso (python.exe)
 if ($LASTEXITCODE -eq 0) {

@@ -8,7 +8,9 @@ from dataclasses import dataclass
 # =========================================================================
 
 BASE_PATH = Path(
-    r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
+    #r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
+    r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
+    
 )
 
 # Definiciones de Directorios de Alto Nivel
@@ -73,6 +75,7 @@ PATHS_CONFIG = {
         "Processed": {
             "Classification_Customers": PROCESSED_DATAFLOW_DIR / 'Master_Customers' / 'Classifications_Customers.xlsx',
             "Master_Customers": PROCESSED_DATAFLOW_DIR / 'Master_Customers' / 'Master_Customers.xlsx'
+            
        }
     },
     
@@ -83,7 +86,8 @@ PATHS_CONFIG = {
             "sku_shared_of_PSD": RAW_DATA_DIR / 'Products' /'other'/ 'sku_shared_of_PSD.xlsx',
             "Sku_for_Review": RAW_DATA_DIR / 'Products' / 'Sku_for_Review.xlsx',
             "hts_products": RAW_DATA_DIR / 'Products' / 'working_files_for_pwt_hts_products'/'HTS_Classification_Workfile.xlsx',
-            "pwt_products": RAW_DATA_DIR / 'Products' / 'working_files_for_pwt_hts_products'/'PWT_Classification_Workfile.xlsx'
+            "pwt_products": RAW_DATA_DIR / 'Products' / 'working_files_for_pwt_hts_products'/'PWT_Classification_Workfile.xlsx',
+            "SkuName": RAW_DATA_DIR / 'Products' / 'other' /'QuerySkuName.parquet'
                 
         },
         "Processed": {
@@ -189,10 +193,12 @@ class MasterProductsPaths:
     # --- INPUTS -------
     #___________________
     """Rutas de acceso rápido para el proceso Master Products."""
-    INPUT_RAW_UPDATE_DEMAND_DIR: Path = PATHS_CONFIG['Demand']['Raw']['Mothly_Update']
+    OUTPUT_PROCESSED_PARQUETS_DIR: Path = PATHS_CONFIG['Demand']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS']
     INPUT_RAW_UPDATE_FILL_RATE_DIR: Path = PATHS_CONFIG['FillRate']['Raw']['Mothly_Update']
     INPUT_RAW_UPDATE_SALES_DIR: Path = PATHS_CONFIG['Sales']['Raw']['Mothly_Update'] 
     INPUT_RAW_SHARED_PSD_FILE: Path = PATHS_CONFIG['Master_Products']['Raw']['sku_shared_of_PSD']
+    INPUT_RAW_SkuName_FILE: Path = PATHS_CONFIG['Master_Products']['Raw']['SkuName']
+    
     INPUT_PROCESSED_GPP_BRAND_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['GPP_Brand']
     #___________________
     # --- OUTPUTS -------

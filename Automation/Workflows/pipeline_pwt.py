@@ -33,12 +33,31 @@ def main():
     print(f'{"="*80}')
     print("--- 🔄 INICIANDO PROCESO:UPDATES ETL ---")
     print(f'{"="*80}')
-    
+    #==================================================================
+    # --- Definición Específica del Entorno Virtual ---
+
+    # La ruta que proporcionaste:
+    RUTA_ENTORNO = Path(r"C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts\venv_Scripts_RMA")
+
+    # En Windows, el ejecutable está dentro de la carpeta 'Scripts'
+    # y el nombre del archivo es 'python.exe'
+    PYTHON_EXEC_PATH = str(RUTA_ENTORNO / "Scripts" / "python.exe")
+
+    # Opcional: Una verificación rápida para asegurarte de que la ruta es correcta
+    if not Path(PYTHON_EXEC_PATH).exists():
+        print(f"ADVERTENCIA CRÍTICA: El ejecutable '{PYTHON_EXEC_PATH}' no existe. Revisa la ruta.")
+    else:
+        print(f"Usando ejecutable de entorno virtual: {PYTHON_EXEC_PATH}")
+
+
+
+
     # =========================================================================
     #  CONFIGURACIÓN DE RUTAS Y MÓDULOS
     # =========================================================================
     BASE_PATH = Path(
-        r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
+        #r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
+        r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
     )
     # Directorio donde se encuentran todos tus módulos (la carpeta 'Scripts')
     DIRECTORIO_RAIZ_MODULOS = BASE_PATH / 'Scripts'
@@ -80,7 +99,7 @@ def main():
     for nombre_amigable, modulo in MODULOS_ETL.items():
         #print(f"\n| Ejecutando: {nombre_amigable} ({modulo})...")
         # Capturando CÓDIGO y OUTPUT con la función mejorada
-        code, output = execute_file_py(modulo, DIRECTORIO_RAIZ_MODULOS) 
+        code, output = execute_file_py(modulo, DIRECTORIO_RAIZ_MODULOS,PYTHON_EXEC_PATH) 
         print(output)
         # Almacenando el resultado completo
         resultados_ejecucion[nombre_amigable] = (code, output) 

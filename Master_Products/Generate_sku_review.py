@@ -17,6 +17,8 @@ import os
 import sys
 
 import pandas as pd
+from pathlib import Path
+
 from typing import List, Union
 
 # Importación de Funciones de Transformación y Reutilización
@@ -27,7 +29,27 @@ from Master_Products.column_processing import (obtain_new_products, assign_sku_b
                               assign_gpp_by_portafolio, verify_psd, verify_gpp,
                               corded_or_cordless_or_gas, assing_qty_batteries, assing_voltaje,
                               assign_bare, assign_sub_brand, review_sku_base_with_diferent_category)
+def consolidar_parquets(carpeta_path):
+    # Definir la ruta de la carpeta
+    ruta = Path(carpeta_path)
+    
+    # Obtener lista de todos los archivos .parquet
+    archivos = list(ruta.glob("*.parquet"))
+    
+    if not archivos:
+        print(f"No se encontraron archivos en {carpeta_path}")
+        return None
 
+    print(f"Consolidando {len(archivos)} archivos...")
+
+    # Leer cada archivo y guardarlo en una lista
+    # Nota: Usamos copy() para asegurar que cada DF sea independiente
+    lista_df = [pd.read_parquet(f) for f in archivos]
+    
+    # Concatenar todos en un solo DataFrame
+    df_final = pd.concat(lista_df, ignore_index=True)
+    print('consolidacion demand ok')
+    return df_final
 
 def main():
     """	
@@ -48,7 +70,7 @@ def main():
         from config_paths import MasterProductsPaths
         path_fill_rate_update=MasterProductsPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
         path_sales_update=MasterProductsPaths.INPUT_RAW_UPDATE_SALES_DIR
-        path_demand_update=MasterProductsPaths.INPUT_RAW_UPDATE_DEMAND_DIR
+        path_demand_update=MasterProductsPaths.OUTPUT_PROCESSED_PARQUETS_DIR
         
         path_producst_hts=MasterProductsPaths.WORKFILE_HTS_FILE
         path_producst_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
@@ -65,7 +87,7 @@ def main():
         #-----------------------------
         df_fill_rate=read_files(path_fill_rate_update)
         df_sales=read_files(path_sales_update)
-        df_demand=read_files(path_demand_update)
+        df_demand=consolidar_parquets(path_demand_update)
 
         df_master_products=pd.read_excel(path_master_products, dtype=str, engine='openpyxl')
         df_new_products=pd.read_excel(path_New_Products, dtype=str, engine='openpyxl')
@@ -78,7 +100,7 @@ def main():
         #--- Genero el archivo con los nuevos productos
         #----------------------------------------------------
         df_new_products= obtain_new_products(df_fill_rate, df_sales, df_demand, df_new_products,df_master_products)
-        
+        print('consolidacion new sku ok')
         #----------------------------------------------------
         #---- Procesamiento de los nuevos productos
         #----------------------------------------------------

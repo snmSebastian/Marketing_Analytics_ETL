@@ -19,9 +19,11 @@ import pandas as pd
 # Permite buscar y recuperar una lista de nombres de archivos que coinciden con un patrón específico.
 import glob
 import os
+from pathlib import Path
+import sys
 
 from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet,format_columns
-
+from Sales.Process_ETL.Process_Files import assign_nsv
 
 # Asgina pais segun el demand group
 def asign_country_code(df_consolidated, df_country):
@@ -40,10 +42,38 @@ def asign_country_code(df_consolidated, df_country):
         country_map = df_country.set_index('Demand Group')['Country']
 
         # Usar .map() para crear la nueva columna 'new country'
-        df_consolidated['fk_Country'] = df_consolidated['Demand Group'].map(country_map)
+        df_consolidated['fk_Country'] = df_consolidated['Demand Group'].map(country_map).fillna(df_consolidated['Demand Group'])
 
         return df_consolidated
 
+def asign_gpp(df_consolidated, df_gpp):
+    df_gpp['fk_gpp']=df_gpp['GPP Division Code'] + '-' + df_gpp['GPP Category Code'] + '-' + df_gpp['GPP Portfolio Code']
+    df_consolidated['fk_gpp']=df_consolidated['GPP Division Code'] + '-' + df_consolidated['GPP Category Code'] + '-' + df_consolidated['GPP Portfolio Code']
+
+    df_consolidated=pd.merge(
+        df_consolidated,
+        df_gpp[['fk_gpp','GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description']],
+        on='fk_gpp',
+        how='left')
+    df_consolidated.drop(columns=['fk_gpp'], inplace=True)
+    return df_consolidated
+
+def asign_skuName(df_consolidated,df_skuName):
+    df_consolidated.columns = df_consolidated.columns.str.strip()
+    df_skuName.columns = df_skuName.columns.str.strip()
+
+    df_consolidated.rename(columns={
+            'Global Material': 'fk_SKU'}, inplace=True)
+    df_skuName.rename(columns={
+            'SKU': 'fk_SKU'}, inplace=True)
+    df_skuName.drop_duplicates(subset=['fk_SKU'], inplace=True)
+    df_consolidated=pd.merge(
+        df_consolidated,
+        df_skuName[['fk_SKU','SKU Description','BRAND']],
+        on='fk_SKU',
+        how='left')
+    return df_consolidated
+    
 # Procesa las columnas relevantes del DataFrame df y las convierte a mayúsculas.    
 def process_columns(df_consolidated,lst_columns):
     ""    
@@ -69,24 +99,15 @@ def process_columns(df_consolidated,lst_columns):
         # lo que mejora la consistencia y el orden de los nombres de archivo.       
         df_consolidated['fk_year_month'] = (df_consolidated['Fiscal Year'].astype(str) + '-' +
                                             df_consolidated['Fiscal Period'].astype(str).str.zfill(2))
-        df_consolidated['clasification']=(df_consolidated['GPP Division'] + '-' +
-                                         df_consolidated['GPP Category'] + '-' +
-                                         df_consolidated['GPP Portfolio'])
-        
-        
-        df_consolidated['fk_date_country_clasification'] = (df_consolidated['fk_year_month'] + '-' +
-                                                            df_consolidated['fk_Country']+ '-' +
-                                                            df_consolidated['clasification']).str.lower().str.strip()
         df_consolidated['fk_Date']=pd.to_datetime(df_consolidated['fk_year_month'],
-                                                  format='%Y-%b',
+                                                  format='%Y-%m',
                                                   errors='coerce')
-        df_consolidated.rename(columns={
-            'Global Material': 'fk_SKU'}, inplace=True)
         
-        df_processed = df_consolidated[lst_columns]                                                                                                                                                                           
+        
+        df_processed = df_consolidated[lst_columns].copy()                                                                                                                                                                           
         # Convertir todas las columnas a mayúsculas y eliminar espacios
         for col in df_processed.columns:        
-            df_processed.loc[:,col] = df_consolidated[col].astype(str).str.upper().str.strip()    
+            df_processed[col] = df_processed[col].astype(str).str.upper().str.strip() 
        
     except KeyError as e:
                 print(f"Error: La columna {e} no se encontró en los archivos. ")
@@ -105,16 +126,53 @@ def assign_local_currency(df_consolidated,df_fx_rate):
           df_fx_rate[['fk_YearMonthCountry','OP Rate']],
           on='fk_YearMonthCountry',
           how='left')
-     df_consolidated['OP Rate']=df_consolidated['OP Rate'].astype(float)
-     df_consolidated['Demand History & Forecast-GSV']=df_consolidated['Demand History & Forecast-GSV'].astype(float)
-     df_consolidated['OP Rate']=df_consolidated['OP Rate'].fillna(0)
-     df_consolidated['Demand History & Forecast-GSV']=df_consolidated['Demand History & Forecast-GSV'].fillna(0)
+     df_consolidated['OP Rate'] = df_consolidated['OP Rate'].fillna(0).astype('float32')
+     df_consolidated['FORECAST_VALUE_GSV'] = df_consolidated['FORECAST_VALUE_GSV'].fillna(0).astype('float32')
 
-     df_consolidated['Demand $ Local Currency']=df_consolidated['Demand History & Forecast-GSV']*df_consolidated['OP Rate']
+     df_consolidated['Demand $ Local Currency']=df_consolidated['FORECAST_VALUE_GSV']*df_consolidated['OP Rate']
      cols_to_drop = ['fk_YearMonthCountry','OP Rate']
      df_consolidated.drop(columns=[col for col in cols_to_drop if col in df_consolidated.columns], inplace=True)
      return df_consolidated    
 
+
+def delete_parquet_files(folder_path: str):
+    """
+    Elimina todos los archivos con extensión .parquet dentro de la carpeta especificada.
+    
+    Args:
+        folder_path (str): Ruta del directorio donde se encuentran los parquets.
+        
+    Returns:
+        None: La función ejecuta la acción e imprime el resultado.
+    """
+    # --- CONFIGURACIÓN DE RUTA ---
+    directory = Path(folder_path)
+    
+    # Verificar si la ruta existe y es un directorio
+    if not directory.is_dir():
+        print(f"La ruta {folder_path} no es válida o no existe.")
+        return
+
+    try:
+        #=========================================================
+        # --- BÚSQUEDA Y ELIMINACIÓN DE ARCHIVOS ---
+        #=========================================================
+        # .glob('*.parquet') busca solo archivos con esa extensión
+        files_to_delete = list(directory.glob('*.parquet'))
+        
+        if not files_to_delete:
+            print(f"No se encontraron archivos .parquet en: {folder_path}")
+            return
+
+        for file in files_to_delete:
+            file.unlink()  # Elimina el archivo permanentemente
+            print(f"Archivo eliminado: {file.name}")
+
+        print(f"--- Limpieza completada: {len(files_to_delete)} archivos eliminados. ✅ ---")
+
+    except Exception as e:
+        print(f"Error al intentar eliminar archivos: {e}")
+        sys.exit(1)
 
 # Función principal que ejecuta el script.
 # Esta función no recibe parámetros y no devuelve ningún valor.
@@ -129,40 +187,77 @@ def main():
     Returns: None: La función orquesta el proceso y no devuelve un valor.
     """
     # Importar las rutas de acceso rápido desde config_paths.py.,
-    from config_paths import DemandPaths
-    historic_raw_dir = DemandPaths.INPUT_RAW_HISTORIC_DIR
+    from config_paths import DemandPaths,MasterProductsPaths
+    demand_update_raw_dir = DemandPaths.INPUT_RAW_UPDATE_DIR
     country_code_file = DemandPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
     processed_parquet_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
     fx_rate=DemandPaths.INPUT_PROCESSED_FX_RATE_FILE
+    path_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
+    path_sku_name=MasterProductsPaths.INPUT_RAW_SkuName_FILE
+    processed_gross_to_net=DemandPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
+    md_product_processed_file=DemandPaths.INPUT_PROCESSED_MASTER_PRODUCTS_FILE
+
      #===============================
     # --- Lectura de archivos 
     #===============================
     # Leer los archivos de datos históricos y consolidarlos en un DataFrame.
-    df_consolidated = read_files(historic_raw_dir)
+    df_consolidated = pd.read_parquet(demand_update_raw_dir/'QueryDemand.parquet', engine='pyarrow')
+    len_initial=len(df_consolidated)
+
     # Leer el archivo de códigos de país.
     df_country = pd.read_excel(country_code_file,
                                sheet_name='Code Country Demand', dtype=str, engine='openpyxl')
-    df_fx_rate = pd.read_excel(fx_rate, dtype=str, engine='openpyxl')
+    df_country_nsv = pd.read_excel(country_code_file,
+                               sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+    
+    #df_fx_rate = pd.read_excel(fx_rate, dtype=str, engine='openpyxl')
+    df_gpp=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='GPP')
+    df_skuName=pd.read_parquet(path_sku_name, engine='pyarrow')
+
+    df_md_product=pd.read_excel(md_product_processed_file,dtype=str, engine='openpyxl')
+    df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
 
     # Definir las columnas relevantes para el procesamiento.    
-    lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU',
-                  'fk_date_country_clasification',
-                  'Demand History & Forecast-QTY', 'Shipment History& Forecast-Qty',
-                  'Demand History & Forecast-GSV', 'Shipment History&Forecast-GSV']
+    lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','BRAND',
+                   'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description',
+                  'FCST_QTY', 'FORECAST_VALUE_GSV','CURRENT_STANDARD_COST']
     df_consolidated = asign_country_code(df_consolidated, df_country)
+    df_consolidated=asign_gpp(df_consolidated,df_gpp)
+    df_consolidated=asign_skuName(df_consolidated,df_skuName)
     df_processed=process_columns(df_consolidated,lst_columns)
 
+    #---ASING NSV
+    df_processed.rename(columns={'FORECAST_VALUE_GSV':'Total Sales'},inplace=True)
+    df_processed=assign_nsv(df_processed, df_md_product, df_gross_to_net,df_country_nsv)
+    df_processed.rename(columns={'Total Sales':'FORECAST_VALUE_GSV'},inplace=True)
+    
+
     #--- Formato de columnas ----
-    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU',
-                  'fk_date_country_clasification']
-    lst_columns_float=['Demand History & Forecast-QTY', 'Shipment History& Forecast-Qty',
-                  'Demand History & Forecast-GSV', 'Shipment History&Forecast-GSV']
+    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','BRAND',
+                       'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description']
+    lst_columns_float=['FCST_QTY', 'FORECAST_VALUE_GSV','NSV',
+                  'CURRENT_STANDARD_COST']
     df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
     #=========================================================
     #--- ASIGNACIÓN COLUMNAS CALCULADAS
     #=========================================================
-    df_consolidated=assign_local_currency(df_consolidated,df_fx_rate)
-    
+    #df_consolidated=assign_local_currency(df_consolidated,df_fx_rate)
+    len_end=len(df_processed)
+    if len_initial==len_end:
+        print(f'{"="}*50')
+        print(f'El DataFrame procesado tiene la misma longitud que el DataFrame original')
+        print(f'{"="}*50')
+    else:
+        print(f'{"="}*50')
+        print(f'El DataFrame procesado tiene una longitud diferente que el DataFrame original')
+        print(f'El dataframe original tiene {len_initial} registros y el dataframe procesado tiene {len_end} registros')
+        print(f'la diferencia es de {len_initial-len_end} registros')
+        print(f'{"="}*50')
+    #=========================================================
+    #--- ACTUALIZACION CARPETA
+    #=========================================================
+    #---- Elimina todos los archivos existentes
+    delete_parquet_files(processed_parquet_dir)
     # --- Agrupacion en archivos parquets
     group_parquet(df_processed, processed_parquet_dir,name='demand')
 

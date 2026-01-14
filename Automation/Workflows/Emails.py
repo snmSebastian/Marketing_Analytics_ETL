@@ -20,8 +20,12 @@ import time
 from pathlib import Path
 from typing import Dict, Tuple
 import gc
+import os
 
-def execute_file_py(modulo: str, directorio: Path) -> tuple[int, str]:
+
+
+
+def execute_file_py(modulo: str, directorio: Path,PYTHON_EXECUTABLE) -> tuple[int, str]:
     """
     Ejecuta un módulo Python y captura el código de salida y el output de error.
     Retorna: (código_salida, mensaje_error_o_output)
@@ -29,8 +33,10 @@ def execute_file_py(modulo: str, directorio: Path) -> tuple[int, str]:
     try:
         # Usamos subprocess.run() que es más simple y bloquea hasta terminar.
         # Capturamos stdout y stderr para el reporte.
+        command = [PYTHON_EXECUTABLE, "-m", modulo]
+        
         resultado = subprocess.run(
-            ["python", "-m", modulo],
+            command,
             cwd=directorio,
             capture_output=True, # Captura stdout y stderr
             text=True,           # Decodifica el output a texto

@@ -13,7 +13,7 @@ import numpy as np
 import  sys
 # mapa de estandarización de marcas 
 BRAND_STANDARD_MAP = {
-    "BLACK + DECKER": ["B+D", "BLACK&DECKER", "BLACKANDDECKER", "BLACK+DECKER®", "BLACK + DECKER"],
+    "BLACK + DECKER": ["B+D", "BLACK&DECKER", "BLACKANDDECKER", "BLACK+DECKER®", "BLACK + DECKER","BLACK+DECKER"],
     "DEWALT": ["DEWALT®", "DWLT", "DEWALT"],
     "STANLEY": ["STANLEY®", "STANLEYTOOLS", "STANLEY"],
     "CRAFTSMAN": ["CRAFTSMAN", "CRAFTSMN", "CRAFTSMAN®"],
@@ -186,7 +186,7 @@ def main():
             'NPI Project HTS', 'Posicionamiento HTS', 'Link']
 
         from config_paths import MasterProductsPaths
-        path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
+        path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE
         path_sku_review = MasterProductsPaths.WORKFILE_NEW_PRODUCTS_REVIEW_FILE
         path_hts=MasterProductsPaths.WORKFILE_HTS_FILE
         path_pwt=MasterProductsPaths.WORKFILE_PWT_FILE

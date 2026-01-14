@@ -1,7 +1,8 @@
 
 # ---  Definir la ubicación del proyecto ---
-$ProjectRoot = "C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts"
-$PythonExe = "$ProjectRoot\venv_Scripts_Marketing_Analytics\Scripts\python.exe"
+#$ProjectRoot = "C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts"
+$ProjectRoot = "C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts"
+$PythonExe = "$ProjectRoot\venv_Scripts_RMA\Scripts\python.exe"
 
 # ---  Cambiar al Directorio de Trabajo ---
 # CRÍTICO: Esto asegura que 'Automation.Workflows' sea importable.

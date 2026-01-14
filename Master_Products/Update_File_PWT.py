@@ -58,7 +58,7 @@ def main():
     print("=" * 55)
     try:
         from config_paths import MasterProductsPaths
-        path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
+        path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE
         path_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
         lst_columns_pwt=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP SBU',
         'GPP Division Code', 'GPP Division Description',

@@ -98,6 +98,22 @@ def asign_country_code(df_consolidated, df_country):
         # Usar .map() para crear la nueva columna 'new country'
         df_consolidated['fk_Country'] = df_consolidated['code concat country'].map(country_map)
 
+        '''ESTA LINEA SE PUEDE ELIMINAR, ES PARA VER CUAL PAIS SE QUEDO SIN ASIGNACION
+        
+        '''
+        df_consolidated['pais']=df_consolidated['code concat country']+'-'+df_consolidated['fk_Country']
+        
+        paises_unicos = df_consolidated['pais'].unique()
+        df_paises = pd.DataFrame(paises_unicos, columns=['code concat country-fk_Country'])
+        df_paises.to_excel(
+            r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Shared_Information_for_Projects\Country\result-code concat country-fk_Country.xlsx', 
+            index=False
+        )
+        
+      
+        '''FIN DE LA LINEA'''
+       
+       
         return df_consolidated
 
 def process_columns(df_consolidated,lst_columns):

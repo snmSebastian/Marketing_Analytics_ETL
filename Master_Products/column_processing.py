@@ -38,8 +38,8 @@ def obtain_new_products(df_fill_rate, df_sales, df_demand, df_new_products,df_ma
 
     lst_columns_fill_and_sales=['Country Material', 'Country Material Name','LAG Brand',
                                 'GPP Division Code', 'GPP Division', 'GPP Category', 'GPP Portfolio']
-    lst_columns_demand=['Global Material', 'Global Material Description','LAG Brand',
-                        'GPP Division Code','GPP Division', 'GPP Category', 'GPP Portfolio']
+    lst_columns_demand=['fk_SKU', 'SKU Description','BRAND',
+                        'GPP Division Description','GPP Category Description', 'GPP Portfolio Description']
     df_fill_rate=df_fill_rate[lst_columns_fill_and_sales]
     df_sales=df_sales[lst_columns_fill_and_sales]
     df_demand=df_demand[lst_columns_demand]
@@ -54,12 +54,12 @@ def obtain_new_products(df_fill_rate, df_sales, df_demand, df_new_products,df_ma
         'LAG Brand': 'Brand'})
 
     df_demand = df_demand.rename(columns={
-        'Global Material': 'SKU',
-        'Global Material Description': 'SKU Description',
-        'GPP Division':'GPP Division Description',
-        'GPP Category': 'GPP Category Description',
-        'GPP Portfolio': 'GPP Portfolio Description',
-        'LAG Brand': 'Brand'})
+        'fk_SKU': 'SKU',
+        'SKU Description': 'SKU Description',
+        'GPP Division Description':'GPP Division Description',
+        'GPP Category Description': 'GPP Category Description',
+        'GPP Portfolio Description': 'GPP Portfolio Description',
+        'BRAND': 'Brand'})
     
     df_new_products = pd.concat([df_sales_fill_rate, df_demand], ignore_index=True)
     df_new_products = df_new_products.drop_duplicates(subset=['SKU'], keep='first')

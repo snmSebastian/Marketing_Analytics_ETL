@@ -1,0 +1,3 @@
+*.pyc
+venv_Scripts_RMA/
+.ipynb_checkpoints/

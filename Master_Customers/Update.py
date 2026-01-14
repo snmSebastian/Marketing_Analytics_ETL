@@ -33,6 +33,7 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     """
     # Asignacion de pais
     df_consolidated = asign_country_code(df_consolidated, df_country)
+   
     df_consolidated['code_customer'] = (
                                     # . Aplicamos el slicing a la columna original (con .str[2:] para cada elemento)
                                 df_consolidated['Sold-To Customer Code'].str[3:]
@@ -50,11 +51,12 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     # Crea las fk para relacionar info de clientes compartidos con los nuevos clientes
     df_customers_shared['fk_country_customer'] = df_customers_shared['Country'].astype(str) + '-' + df_customers_shared['fk_Customer_Code'].astype(str) 
     df_customers_shared['fk_country_customer'] = df_customers_shared['fk_country_customer'].str.upper().str.strip().str.replace(' ', '')
-    
+   
    
     df_consolidated['fk_country_customer'] = df_consolidated['fk_Country'] + '-' + df_consolidated['code_customer'].astype(str)    
     df_consolidated['fk_country_customer'] = df_consolidated['fk_country_customer'].str.upper().str.strip().str.replace(' ', '')
-
+   
+    
     df_customers_clasifications['fk_channel']=df_customers_clasifications['pk_Sold-To Dist Channel']
     df_customers_clasifications['fk_channel'] = df_customers_clasifications['fk_channel'].astype(str).str.upper().str.strip().str.replace(' ', '')
    
@@ -65,7 +67,6 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     df_consolidated['Sold-To Dist Channel Shared']=df_consolidated['Sold-To Dist Channel Shared'].fillna('NOTFOUND')
     df_consolidated['Sold-To Dist Channel Shared'] = df_consolidated['Sold-To Dist Channel Shared'].str.upper().str.strip().str.replace(' ', '')
    
-  
     condicion_not_found = df_consolidated['Sold-To Dist Channel Shared'].str.contains('NOTFOUND|NOT', regex=True)
     df_consolidated['Sold-To Dist Channel Shared']=np.where(~condicion_not_found,
                                                              df_consolidated['Sold-To Dist Channel Shared'],
@@ -106,7 +107,6 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     default=df_consolidated['Sold-To Dist Channel Shared'] # Si ninguna condición aplica (por seguridad)
     )
 
-    
     df_consolidated=pd.merge(df_consolidated,
              df_customers_clasifications[['fk_channel','pk_Sold-To Dist Channel','fk_Sold-To Dist Type']],
              how='left',
@@ -114,14 +114,13 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
              right_on='fk_channel'
              )
    
-    
     # delete duplicates
     df_consolidated = df_consolidated.drop_duplicates(subset=['fk_country_customer'])
    
     lst_columns=['fk_Country', 'Sold-To Customer Code', 'Sold-To Customer',
     'pk_Sold-To Dist Channel', 'fk_Sold-To Dist Type','fk_country_customer']
     df_consolidated=df_consolidated[lst_columns]
-    
+   
     df_consolidated.rename(columns={
     'fk_Country': 'fk_Country',
     'Sold-To Customer Code': 'fk_Sold-To Customer',
@@ -129,8 +128,7 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     'pk_Sold-To Dist Channel': 'fk_Dist_Channel',
     'fk_Sold-To Dist Type': 'fk_Dist_Type'
     }, inplace=True)
-    print('todo ok')
-
+   
     # Usar np.select para aplicar todas las condiciones de una vez 
     return df_consolidated
 
@@ -241,7 +239,9 @@ def main():
         from config_paths import MasterCustomersPaths
         country_code_file=MasterCustomersPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
         customers_shared=MasterCustomersPaths.INPUT_RAW_Customers_Shared_by_Country_FILE
-        md_customers=MasterCustomersPaths.OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE_PRUEBA
+        
+        md_customers=MasterCustomersPaths.OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE
+        
         notation_customers_file=MasterCustomersPaths.INPUT_RAW_NOTATION_NAMES_FILE
         
         fill_rate_update=MasterCustomersPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
@@ -256,7 +256,6 @@ def main():
         df_fill_rate=read_files(fill_rate_update)
         df_sales=read_files(sales_update)
         df_master=pd.read_excel(md_customers, dtype=str, engine='openpyxl')
-
         # --- LECTURA Y CONSOLIDACIÓN DE DATOS DE ACTUALIZACIÓN --
         lst_columns=['Country Code', 'Destination Country','Sold-To Customer Code','Sold-To Customer','Sold-To Dist Channel']
         

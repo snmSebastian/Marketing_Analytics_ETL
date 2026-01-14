@@ -57,7 +57,7 @@ import pandas as pd # Asumo que pandas está importado
 #--- FUNCIONES PARA CREAR COLUMNAS CALCULADAS
 #====================================================
 
-def assign_nsv(df_processed, df_md_product, df_gross_to_net):
+def assign_nsv(df_processed, df_md_product, df_gross_to_net,df_country):
     """
     Asigna la Venta Neta (NSV) al DataFrame principal (Sales/Demand) mediante dos cruces Left Join:
     1. Cruce con el Maestro de Productos para obtener Brand y GPP SBU.
@@ -87,16 +87,26 @@ def assign_nsv(df_processed, df_md_product, df_gross_to_net):
         left_on='fk_SKU',
         right_on='SKU_x',
     )
-     
-    # Renombrar columnas del G2N y aplicar inplace
-    df_gross_to_net.rename(columns={'Date':'Date_y', 'Country':'Country_y', 'Brand':'Brand_y', 'SBU':'SBU_y'}, inplace=True)
-    
+    # CRUCE 2: Obtener la region de venta, dado que gtonet tiene cca como pais(no cada uno de los paises)
+    df_country['CountryRegion']=df_country['Country']+'-'+df_country['Region']
+    df_country['CountryRegion']=df_country['CountryRegion'].str.upper().str.strip()
+    df_country = df_country.drop_duplicates(subset=['CountryRegion'], keep='first')
+
+    df_processed=pd.merge(df_processed,
+                       df_country[['Country','Region']],
+                       how='left',
+                       left_on='fk_Country',
+                       right_on='Country')
+   
+   
     # Crear clave de cruce en el DataFrame principal
     df_processed['fk_g2n'] = (df_processed['fk_Date'].astype(str) + 
-                             df_processed['fk_Country'].str[:3] + 
+                             df_processed['Region'].str[:3] + 
                              df_processed['Brand_x'] + 
                              df_processed['GPP SBU_x'])
-    
+    # Renombrar columnas del G2N y aplicar inplace
+    df_gross_to_net.rename(columns={'Date':'Date_y', 'Country':'Country_y', 'Brand':'Brand_y', 'SBU':'SBU_y'}, inplace=True)
+
     # Crear clave de cruce en el DataFrame Gross To Net
     df_gross_to_net['fk_g2n_y'] = (df_gross_to_net['Date_y'].astype(str) + 
                                    df_gross_to_net['Country_y'] + 
@@ -107,7 +117,7 @@ def assign_nsv(df_processed, df_md_product, df_gross_to_net):
     df_processed['fk_g2n'] = df_processed['fk_g2n'].str.upper().str.strip()
     df_gross_to_net['fk_g2n_y'] = df_gross_to_net['fk_g2n_y'].str.upper().str.strip()
     
-    # --- CRUCE 2: Obtener el G2N% ---
+    # --- CRUCE 3: Obtener el G2N% ---
     df_processed = pd.merge(
         df_processed,
         df_gross_to_net[['fk_g2n_y', 'G2N%']], # Seleccionar fk_g2n_y como clave
@@ -115,15 +125,16 @@ def assign_nsv(df_processed, df_md_product, df_gross_to_net):
         left_on='fk_g2n',
         right_on='fk_g2n_y',
     )
-    
-    
+  
     df_processed['Total Sales'] = pd.to_numeric(df_processed['Total Sales'], errors='coerce').fillna(0)
     df_processed['G2N%'] = df_processed['G2N%'].fillna(0)
     df_processed['G2N%'] = df_processed['G2N%'].astype(float)
     df_processed['NSV'] = df_processed['Total Sales'] * (1 - df_processed['G2N%'])
     
     # 3. Limpieza y Retorno
-    cols_to_drop = ['SKU_x','Brand_x', 'GPP SBU_x',  'Date_y', 'Country_y', 'Brand_y', 'SBU_y', 'fk_g2n_y', 'fk_g2n','G2N%']
+    cols_to_drop = ['SKU_x','Brand_x', 'GPP SBU_x',
+                    'Country','Region',
+                    'Date_y', 'Country_y', 'Brand_y', 'SBU_y', 'fk_g2n_y', 'fk_g2n','G2N%']
     df_processed.drop(columns=[col for col in cols_to_drop if col in df_processed.columns], inplace=True)
     
     return df_processed
@@ -241,67 +252,70 @@ def LaunchYear_VR(df_processed,df_npi,df_country):
     Returns:
         pd.DataFrame: DataFrame original con columnas 'VR %' y 'Launch Year'.
     """
+    # ======== TRATAMIENTO NPI ==========================================
     # año des, para determinar el rango de NPI
     start_year = 2021
     valid_years = list(range(start_year, start_year + 7)) # [2021, ..., 2027]
     #filtra npi para obtener solo los nuevos productos de los ultimos 3 años
     mask_npi = (
         (df_npi['New New/Carryover'] == 'New New') & 
-        (df_npi['Fiscal Year'].astype(int).isin(valid_years))
+        (df_npi['Fiscal Year'].astype(int).isin(valid_years)) 
     )
     df_npi_new = df_npi[mask_npi].copy()
     df_npi_new.rename(columns={'Fiscal Year':'Launch Year'}, inplace=True)
-    df_npi_new=df_npi_new[['Launch Year','Region','SKU']]
-    df_npi_new.drop_duplicates(subset=['Launch Year','Region','SKU'], inplace=True)
+    df_npi_new=df_npi_new[['Launch Year','Region','SKU']].copy()
+    df_npi_new['Region']=df_npi_new['Region'].str.upper().str.strip()
+    df_npi_new['SKU']=df_npi_new['SKU'].str.upper().str.strip()
 
-    #cre las llaves para cruzar ventas con npi
-    df_npi_new['fk_YearRegionSku']=(df_npi_new['Launch Year']+'-'+
-                                     df_npi_new['Region']+'-'+
-                                     df_npi_new['SKU'])
-    
-    df_npi_new['fk_YearRegionSku']=df_npi_new['fk_YearRegionSku'].str.upper().str.strip()
-    
+    #Ordenar y mantener solo el año de lanzamiento más reciente para cada Region-SKU único
+    df_npi_new.sort_values(by='Launch Year', ascending=False, inplace=True)
+    df_npi_new.drop_duplicates(subset=['Region','SKU'],keep='first', inplace=True)
 
+
+    #llaves para cruzar ventas con npi
+    df_npi_new['fk_RegionSku']=(df_npi_new['Region']+'-'+
+                                df_npi_new['SKU'])
+    df_npi_new['fk_RegionSku']=df_npi_new['fk_RegionSku'].str.upper().str.strip()
+    serie_new_map=df_npi_new.set_index('fk_RegionSku')['Launch Year']
+
+    #============ TRATAMIENTO SALES =============================
+
+    #===ASIGNACION DE REGION DE VENTA
     #Elimina duplicados en df_country
     df_country['CountryRegion']=df_country['Country']+'-'+df_country['Region']
     df_country['CountryRegion']=df_country['CountryRegion'].str.upper().str.strip()
     df_country = df_country.drop_duplicates(subset=['CountryRegion'], keep='first')
-   
-    # Asignacion de la region segun pais
-    df_processed=pd.merge(
-        df_processed,
-        df_country[['Country','Region']],
-        how='left',
-        left_on='fk_Country',
-        right_on='Country'
-    )
+    serie_regiones_map = df_country.set_index('Country')['Region']
+    df_processed['Region'] = df_processed['fk_Country'].map(serie_regiones_map)
+
     # fk para saber si es un nuevo producto en algunos de los 3 años de interes
-    df_processed['fk_year']=df_processed['fk_year_month'].str[:4]
-    df_processed['fk_YearRegionSku']=(df_processed['fk_year']+'-'+
-                                   df_processed['Region']+'-'+
-                                   df_processed['fk_SKU'])
+    df_processed['fk_RegionSku']=(df_processed['Region']+'-'+
+                                  df_processed['fk_SKU'])
     
-    # fk con los años de interes
-    df_processed=pd.merge(
-        df_processed,
-        df_npi_new[['fk_YearRegionSku','Launch Year']],
-        how='left',
-        on='fk_YearRegionSku'
+    #========== MAPEO DE LAUNC YEAR by RegionSku ================
+    df_processed['npi_year'] = df_processed['fk_RegionSku'].map(serie_new_map)
+    df_processed['npi_year'] = pd.to_numeric(df_processed['npi_year'], errors='coerce').astype('Int64')
+    df_processed['sale_year'] = pd.to_numeric(df_processed['fk_year_month'].astype(str).str[:4], errors='coerce').astype('Int64')
+
+    diferencia_años = df_processed['sale_year'] - df_processed['npi_year']
+    condicion_es_npi = diferencia_años.notna() & diferencia_años.between(0, 2)
+    valor_npi_str = 'npi' + df_processed['npi_year'].fillna(0).astype(int).astype(str)
+
+    df_processed['Launch Year'] = np.select(
+        [condicion_es_npi],
+        [valor_npi_str],
+        default="core"
     )
-    mask_valid_VR = df_processed['Launch Year'].fillna('').astype(str).str.isnumeric()
-    
-    df_processed['VR %'] = np.where(
-        mask_valid_VR,
+
+    df_processed['VR %']=np.where(
+        df_processed['Launch Year'].str.lower().str.contains('npi'),
         "VR %",
         ""
     )
-    df_processed['Launch Year'] = np.where(
-        mask_valid_VR,
-        'NPI'+df_processed['fk_year'],
-        "Core"
-    )
+
     #columnas a eliminar
-    cols_to_drop = ['fk_YearRegionSku']
+    #cols_to_drop = ['fk_RegionSku', 'Region']
+    cols_to_drop = ['fk_RegionSku', 'Region', 'npi_year', 'sale_year'] 
     df_processed.drop(columns=[col for col in cols_to_drop if col in df_processed.columns], inplace=True)
     
     return df_processed
@@ -401,7 +415,7 @@ def main():
     # Importamos las rutas
     from config_paths import SalesPaths
     sales_historic_raw_dir = SalesPaths.INPUT_RAW_HISTORIC_DIR
-    #sales_historic_raw_dir=r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\Historic\prueba'
+    #sales_historic_raw_dir=r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Sales\prueba'
     
     country_code_file = SalesPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
     processed_gross_to_net=SalesPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
@@ -414,12 +428,14 @@ def main():
     #===============================
     df_consolidated = read_files(sales_historic_raw_dir)
     print(f'longitud archivos leidos: {len(df_consolidated)}')
+    suma_init=df_consolidated["Total Sales"].astype(float).sum()
+
     # Leer el archivo de códigos de país.
     df_country = pd.read_excel(country_code_file,
                                sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
     df_md_product=pd.read_excel(md_product_processed_file,dtype=str, engine='openpyxl')
     df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
-    df_npi=pd.read_excel(npi,dtype=str, engine='openpyxl')
+    df_npi=pd.read_excel(npi,sheet_name='Database',dtype=str, engine='openpyxl')
     df_filter_npi=pd.read_excel(filter_npi,dtype=str, engine='openpyxl')
     
     # Definir las columnas relevantes para el procesamiento.    
@@ -428,31 +444,64 @@ def main():
                    'Total Sales', 'Total Cost', 'Units Sold']
     df_consolidated = asign_country_code(df_consolidated, df_country)
     
+    '''ESTA LINEA ES DE CONTROL PARA VER EL NUMERO DE REGISTROS SIN ASOCIACION DE PAIS Y CUANTO SUMA SU VENTA'''
+    df_sin_pais = df_consolidated[df_consolidated['fk_Country'].isna()]
+    num_filas = len(df_sin_pais)
+    venta_sin_pais = df_sin_pais['Total Sales'].astype(float).sum()
+    print(f"Número de filas de ventas sin country: {num_filas}")
+    print(f"Suma de ventas sin país: {venta_sin_pais}")
+    if suma_init != 0:
+        porcentaje = (venta_sin_pais / suma_init) * 100
+        print(f"¿Cuánto representa la venta sin país en el total?: {porcentaje:.2f}%")
+    else:
+        print("¿Cuánto representa la venta sin país en el total?: 0.00% (Total inicial es 0)")
+
+    print("=" * 55)
+    '''FIN DE LA LINEA DE CONTROL'''
+
+
     df_processed=process_columns(df_consolidated,lst_columns)
     print(f'longitud df dataset procesado: {len(df_processed)}')
     #=========================================================
     #--- ASIGNACIÓN COLUMNAS CALCULADAS
     #=========================================================
-    df_processed=assign_nsv(df_processed,df_md_product,df_gross_to_net)
+    df_processed=assign_nsv(df_processed, df_md_product, df_gross_to_net,df_country)
     print(f'longitud posterior a asignación NSV: {len(df_processed)}')
+
     df_processed=assign_selling_unit_price(df_processed)
     print(f'longitud posterior a asignación Selling Unit Price: {len(df_processed)}')
+    
     df_processed=assign_NPI_New_Carryover(df_processed,df_npi,df_country)
     print(f'longitud posterior a asignación NPI: {len(df_processed)}')
+    
     df_processed=LaunchYear_VR(df_processed,df_npi,df_country)
+    
     print(f'longitud dataset procesado con LaunchYear_VR: {len(df_processed)}')   
     df_processed=assign_num_batteries(df_processed,df_md_product)
     df_processed=assign_NSV_NPI_w_Combo(df_processed,df_filter_npi)
-    if len(df_processed) == len(df_consolidated):
+
+
+    suma_end=df_processed["Total Sales"].astype(float).sum()
+    if len(df_processed) == len(df_consolidated) and suma_init==suma_end:
+        print(f'{"*"*55}')
+        print("La longitud del DataFrame procesado coincide con la del DataFrame original.")
         print("El DataFrame procesado tiene la misma longitud que el DataFrame original.")
+        print(f'El dataframe original y final tienen la misma suma de ventas: {suma_init}')
+        print(f'{"*"*55}')
        
     else:
+        print(f'{"*"*55}')
         print("La longitud del DataFrame procesado no coincide con la del DataFrame original.")
-        print(f'longitud dataset crudo ñ{len(df_consolidated)}')
+        print(f'longitud dataset crudo {len(df_consolidated)}')
         print(f'longitud dataset procesado: {len(df_processed)}')
         print(f'diferencia: {len(df_consolidated)-len(df_processed)}')
         print(f'Porcentaje de diferencia: {(len(df_consolidated)-len(df_processed))/len(df_consolidated)*100:.2f}%')
-        print(f'longitud npi path 2025: 2444 2024:1321' )
+
+        print(f'la suma inicial es: {suma_init}')
+        print(f'la suma final es: {suma_end}')
+        print(f'la diferencia es: {suma_init-suma_end}')
+        print(f'El porcentaje de diferencia es: {(suma_init-suma_end)/suma_init*100:.2f}%')
+        print(f'{"*"*55}')
     #====================================
     # --- Formato de columnas ---
     #====================================
@@ -464,14 +513,12 @@ def main():
                          'NSV','Selling Unit Price',
                          'NPI Incremental Sales $',
                          'Num Batteries Sales',
-                         'Net Sales NPI w/Combo'
+                         'Net Sales NPI w/Combo' 
                          ]
     df_processed=format_columns(df_processed,lst_columns_srt,lst_columns_float)
-    
-    #  --- ESCRITURA DE ARCHIVOS PARQUET SEGMENTADOS --
+    #  --- ESCRITURA DE ARCHIVOS PARQUET SEGMENTADOS --  
     group_parquet(df_processed, processed_parquet_dir,name='sales')
     #group_parquet(df_processed, sales_historic_raw_dir,name='sales')
-
 
 # --- EJECUCION DEL SCRIPT ---
 # Es una buena práctica envolver la ejecución principal en un bloque if __name__ == "__main__":
