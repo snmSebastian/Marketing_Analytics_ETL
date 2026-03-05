@@ -56,6 +56,40 @@ import pandas as pd # Asumo que pandas está importado
 #====================================================
 #--- FUNCIONES PARA CREAR COLUMNAS CALCULADAS
 #====================================================
+def process_columns_sales(df_consolidated,lst_columns):
+    """    
+        Renombra, calcula columnas clave ('fk_year_month', 'clasification', 'fk_date_country_customer_clasification',
+        'fk_Date'), y selecciona el subconjunto final de columnas para el DataFrame procesado.
+    Args:
+        df_consolidated (pd.DataFrame): DataFrame consolidado que contiene todas las columnas sin procesar.
+        lst_columns (list): Lista de strings con los nombres de las columnas finales deseadas, incluyendo las recién creadas (e.g., 'fk_Date', 'fk_Country').
+    Returns:
+        pd.DataFrame: DataFrame final, filtrado por lst_columns, listo para ser guardado.
+    """
+    try:
+
+        
+        
+        df_consolidated['clasification']=(df_consolidated['GPP Division'] + '-' +
+                                         df_consolidated['GPP Category'] + '-' +
+                                         df_consolidated['GPP Portafolio'])
+        
+        
+        df_consolidated['fk_date_country_customer_clasification'] = (df_consolidated['fk_year_month'] + '-' +
+                                                            df_consolidated['fk_Country']+ '-' +
+                                                            df_consolidated['fk_Sold_To_Customer_Code']+ '-' +
+                                                            df_consolidated['clasification']).str.upper().str.strip()
+        
+        
+        
+        df_processed = df_consolidated[lst_columns].copy()                                                                                                                                                                           
+        # Convertir todas las columnas a mayúsculas y eliminar espacios
+        for col in df_processed.columns:        
+            df_processed.loc[:,col] = df_consolidated[col].astype(str).str.upper().str.strip()    
+       
+    except KeyError as e:
+                print(f"Error: La columna {e} no se encontró en los archivos. ")
+    return df_processed
 
 def assign_nsv(df_processed, df_md_product, df_gross_to_net,df_country):
     """
@@ -217,7 +251,6 @@ def assign_NPI_New_Carryover(df_processed,df_npi,df_country):
     #clave para cruzar sales con npi
     df_npi=df_npi.copy()
     df_npi['fk_YearMonthCountrySku']=df_npi['fk_YearMonthCountrySku'].str.upper().str.strip()
-    
     #cruce para obtener New New/Carryover y Incremental %
     df_processed=pd.merge(
         df_processed,
@@ -226,6 +259,8 @@ def assign_NPI_New_Carryover(df_processed,df_npi,df_country):
         left_on='fk_NPI',
         right_on='fk_YearMonthCountrySku',
     )
+
+
     df_processed['New New/Carryover']=df_processed['New New/Carryover'].fillna('Core')
     df_processed['NSV']=df_processed['NSV'].fillna(0)
     df_processed['NSV']=df_processed['NSV'].astype(float)
@@ -267,7 +302,7 @@ def LaunchYear_VR(df_processed,df_npi,df_country):
     df_npi_new['Region']=df_npi_new['Region'].str.upper().str.strip()
     df_npi_new['SKU']=df_npi_new['SKU'].str.upper().str.strip()
 
-    #Ordenar y mantener solo el año de lanzamiento más reciente para cada Region-SKU único
+    #Ordenar y mantener solo el año de lanzamiento más antiguo para cada Region-SKU único
     df_npi_new.sort_values(by='Launch Year', ascending=False, inplace=True)
     df_npi_new.drop_duplicates(subset=['Region','SKU'],keep='first', inplace=True)
 
@@ -399,6 +434,42 @@ def assign_NSV_NPI_w_Combo(df_processed,df_filter_npi):
     
     return df_processed
 
+def assign_fk_YearRegionSku(df_processed, df_country):
+    """
+    Asigna la clave compuesta 'Año-Región-SKU' optimizada para 2026.
+    """
+    # Preparación de la tabla maestra (df_country)
+    # Limpieza proactiva: evitamos problemas de mayúsculas/espacios antes de crear el índice
+    df_country = df_country.copy()
+    df_country['Country'] = df_country['Country'].astype(str).str.upper().str.strip()
+    df_country['Region'] = df_country['Region'].astype(str).str.upper().str.strip()
+    
+    # Eliminamos duplicados directamente sobre 'Country' para asegurar un mapeo 1:1
+    mapping_dict = df_country.drop_duplicates('Country').set_index('Country')['Region'].to_dict()
+
+    # Mapeo de Región
+    # Normalizamos la columna de búsqueda en el DF principal
+    df_processed['fk_Country'] = df_processed['fk_Country'].astype(str).str.upper().str.strip()
+    df_processed['Region'] = df_processed['fk_Country'].map(mapping_dict)
+
+    # Gestión de nulos (Crucial para que la llave no se rompa)
+    # Si un país no existe en la maestra, asignamos 'UNKNOWN' para evitar llaves rotas
+    df_processed['Region'] = df_processed['Region'].fillna('UNKNOWN')
+
+    # Creación de la clave compuesta
+    # Usamos .astype(str) para prevenir errores si fk_SKU o el año vienen como números
+    df_processed['fk_YearRegionSku'] = (
+        df_processed['fk_year_month'].astype(str).str[:4] + '-' +
+        df_processed['Region'] + '-' +
+        df_processed['fk_SKU'].astype(str)
+    ).str.upper().str.strip()
+
+    # 5. Limpieza
+    df_processed.drop(columns=['Region'], inplace=True)
+
+    return df_processed
+
+
 
 
 def main():
@@ -479,7 +550,8 @@ def main():
     print(f'longitud dataset procesado con LaunchYear_VR: {len(df_processed)}')   
     df_processed=assign_num_batteries(df_processed,df_md_product)
     df_processed=assign_NSV_NPI_w_Combo(df_processed,df_filter_npi)
-
+    df_processed=assign_fk_YearRegionSku(df_processed, df_country)
+    
 
     suma_end=df_processed["Total Sales"].astype(float).sum()
     if len(df_processed) == len(df_consolidated) and suma_init==suma_end:
@@ -508,7 +580,8 @@ def main():
     lst_columns_srt = ['fk_Date','fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code', 'fk_SKU',
                    'fk_date_country_customer_clasification',
                    'New New/Carryover',
-                   'Launch Year','VR %']
+                   'Launch Year','VR %',
+                   'fk_YearRegionSku']
     lst_columns_float = ['Total Sales', 'Total Cost', 'Units Sold',
                          'NSV','Selling Unit Price',
                          'NPI Incremental Sales $',

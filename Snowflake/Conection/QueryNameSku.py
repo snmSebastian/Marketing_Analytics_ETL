@@ -24,30 +24,34 @@ def main():
     print("=" * 55)
     conexion=conectar_snowflake_sso(Database="PROD_EDW",Schema="DIMENSIONS")
     sql="""
-        SELECT 
+              SELECT 
             prod_id_hrmz as SKU,
-            prod_name AS "SKU Description",
+            prod_desc_hrmz  AS "SKU Description",
 
-            final_brand as Brand,
+            final_brand as "Brand",
 
             final_gpp AS "GPP Code",
 
-            gpp_sbu_id AS "SBU Code",
-            gpp_sbu_desc AS "SBU Description",
+            final_sbu_id AS "GPP SBU",
+            final_sbu_desc AS "GPP SBU Description",
 
-            gpp_division_id as "Division Code",
-            gpp_division_desc as "Division Description",
+            final_gpp_division_id as "GPP Division Code",
+            final_gpp_division_desc as "GPP Division Description",
 
-            gpp_category_id as "Category Code",
-            gpp_category_desc as "Category  Description",
+            final_gpp_category_id as "GPP Category Code",
+            final_gpp_category_desc as "GPP Category Description",
 
-            gpp_portfolio_id as "Portafolio Code",
-            gpp_portfolio_desc as "Portafolio Description",
+            final_gpp_portfolio_id as "GPP Portfolio Code",
+            final_gpp_portfolio_desc as "GPP Portfolio Description",
+
+            FINAL_POWER_SOURCE as "Corded / Cordless",
 
             FINAL_GPP_DESC_SYS as "System"
 
-        FROM PROD_EDW.DIMENSIONS.DIM_PRODUCT
+        FROM PROD_EDW.DIMENSIONS.DIM_FINAL_PRODUCT
         WHERE FINAL_GPP_DESC_SYS IN ('SAPC11','SAPE03','QADAR','SAPBYD','QADCH','QADPE','QADBR')
+
+
     """
 
     df_queryDemand=query(conexion,sql)

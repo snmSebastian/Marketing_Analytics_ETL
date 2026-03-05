@@ -19,9 +19,9 @@ import win32com.client as win32
 import time
 from pathlib import Path
 import sys
+import snowflake.connector
+
 from .Emails import execute_file_py,send_etl_report
-import os # Asegúrate de importar os
-PYTHON_EXECUTABLE = sys.executable 
 
 def main():
     """
@@ -35,7 +35,7 @@ def main():
     print(f'{"="*80}')
     print("--- 🔄 INICIANDO PROCESO:UPDATES ETL ---")
     print(f'{"="*80}')
-    
+
     #==================================================================
     # --- Definición Específica del Entorno Virtual ---
 
@@ -54,13 +54,13 @@ def main():
 
 
 
-
+    
     # =========================================================================
     #  CONFIGURACIÓN DE RUTAS Y MÓDULOS
     # =========================================================================
     BASE_PATH = Path(
        # r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
-         r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
+        r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
     )
     # Directorio donde se encuentran todos tus módulos (la carpeta 'Scripts')
     DIRECTORIO_RAIZ_MODULOS = BASE_PATH / 'Scripts'
@@ -68,25 +68,34 @@ def main():
     # Corresponde a Master_Products/Update_md_products.py
     
     #modulo_products = 'Master_Products.Update_md_products' 
-    modulo_sku_review='Master_Products.Generate_sku_review'
+    #modulo_sku_review='Master_Products.Generate_sku_review'
     #modulo_hts='Master_Products.Update_File_HTS'
     #modulo_pwt='Master_Products.Update_File_PWT'
-    modulo_customers='Master_Customers.Update'
-    modulo_demand='Demand.Process_ETL.Update'
-    modulo_fill_rate='Fill_Rate.Process_ETL.Update'
-    modulo_sales='Sales.Process_ETL.Update'
+    #modulo_customers='Master_Customers.Update'
+    #modulo_demand='Demand.Process_ETL.Update'
+    #modulo_fill_rate='Fill_Rate.Process_ETL.Update'
+    #modulo_sales='Sales.Process_ETL.Update'
+    #modulo_QuerySkuName='Snowflake.Conections.QueryNameSku'
+    modulo_QueryDemand='Snowflake.Conection.QueryDemand'
+    modulo_QuerySales='Snowflake.Conection.QuerySales'
+
 
     # Diccionario de módulos a ejecutar: {nombre_amigable: nombre_del_modulo}
     MODULOS_ETL = {
-        "Demand Update": modulo_demand,
-        "Fill Rate Update": modulo_fill_rate,
-        "Sales Update": modulo_sales,
-        "Master Customers Update": modulo_customers,
+        #"Demand Update": modulo_demand,
+        #"Fill Rate Update": modulo_fill_rate,
+        #"Sales Update": modulo_sales,
+        #"Master Customers Update": modulo_customers,
 
         #"Master Products Update": modulo_products,
         #"HTS Update": modulo_hts,
         #"PWT Update": modulo_pwt,
-        "SKU Review Generation": modulo_sku_review
+        #"SKU Review Generation": modulo_sku_review,
+
+        #"QueryDemand": modulo_QueryDemand,
+        "QuerySales": modulo_QuerySales,
+
+        #"QuerySkuName": modulo_QuerySkuName
 
     }
     
@@ -111,8 +120,8 @@ def main():
     # --- DEFINICION SUBJECT Y BOD
     # ===================================================
     SUBJECTS_ETL = [
-        "Proceso ETL Finalizado con Éxito",                      # Éxito (lst_subject[0])
-        "ERROR: {num} de {total} Módulos Fallaron en ETL Diario"  # Fallo (lst_subject[1])
+        "Query Sales ejecutado exitosamente",  # Éxito (lst_subject[0])
+        "🚨 ERROR CRÍTICO: Fallo en ETL - Query Sales Fallo" # Fallo (lst_subject[1])
     ]
     # Definición de Body (Plantillas HTML COMPLETAS)
         # lst_body[0]: Body de Éxito
@@ -120,58 +129,42 @@ def main():
     BODY_TEMPLATE_EXITO = f"""
     <html>
     <body>
-        <h2 style="color: green;">✅ ¡Proceso ETL Finalizado con Éxito!</h2>
-        <p>Hola,</p>
-        <p>La orquestación ETL se ejecutó correctamente, procesando <b>{{total_modulos}} módulos</b> sin registrar errores críticos.</p>
+        <h2 style="color: green;">✅ La query que extrae la información de sales de snowflake del presente mes en adelante se ejecuto de manera exitosa
+        y está lista para revisión</h2>
         
-        <hr style="border: 1px solid #ccc;">
+        <p>Saludos.</p>
 
-        <h3>1. Acciones Automáticas (Dataflows)</h3>
-        <p>A continuación, se procederá automáticamente a la <b>actualización de los Dataflows</b> en Power BI Service:</p>
-        <ul>
-            <li>Demand</li>
-            <li>Sales</li>
-            <li>Fill Rate</li>
-            <li>Master Customers</li>
-            <li>Master Products</li>
-
-        </ul>
-
-        <p style="margin-top: 30px;">Saludos,</p>
-        
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
-            <b>Sebastian Nuñez.</b><br>
-            Data Scientist & Data Base Analyst.<br>
-            Stanley Black & Decker, Inc.
+        <b>Sebastian Nuñez.</b><br>
+        Data Scientist & Data Base Analyst.<br>
+        Stanley Black & Decker, Inc.
         </p>
     </body>
     </html>
     """
+
+    #### **B. Body de Fallo (`lst_body[1]`): Error en la Generación**
+
     BODY_TEMPLATE_FALLO = f"""
     <html>
     <body>
-        <h2 style="color: red;">🚨 ¡ATENCIÓN CRÍTICA! Fallos en la Orquestación ETL</h2>
+        <h2 style="color: red;">🚨 ¡ALERTA! Fallos en la ejecución de la query de sales de snowflake</h2>
         <p>Estimado equipo,</p>
-        <p>El proceso ETL falló. Se detectaron <b>{{num_fallidos}} errores</b> de un total de <b>{{total_modulos}} módulos</b>. Se requiere revisión inmediata.</p>
+        <p>La query ha fallado. Se detectaron errores
+        <p>Por esta razón, la información de<b>Demanda</b> <b>NO se ha actualizado</b> o podría contener información incompleta/errónea.</p>
         
-        <p style="font-weight: bold; color: red; margin-top: 15px;">
-            🚫 Proceso Detenido: Hasta que el problema se solucione, la <b>actualización de los Dataflows</b> de Demand, Sales, Fill Rate, Master Customers  y Master Products ha sido <b>paralizada</b> para evitar inyectar datos corruptos.
-        </p>
         
-        <hr style="border: 1px solid #ccc;">
+        <p><b>Detalle de Módulos con Error:</b></p>
+        {{detalle_errores}}
+        
+        <p>Saludos.</p>
 
-        <h3>Resumen de Errores:</h3>
-        {{detalle_errores}} 
-        
-        <p style="margin-top: 20px;">Por favor, revise los logs en el servidor para el detalle completo.</p>
-        
-        <p style="margin-top: 30px;">Saludos.</p>
-        
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
-            <b>Sebastian Nuñez.</b><br>
-            Data Science & Data Base Analyst.<br>
-            Stanley Black & Decker, Inc.
+        <b>Sebastian Nuñez.</b><br>
+        Data Science & Data Base Analyst.<br>
+        Stanley Black & Decker, Inc.
         </p>
+        
     </body>
     </html>
     """

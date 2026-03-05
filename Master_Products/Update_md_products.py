@@ -13,7 +13,7 @@ import numpy as np
 import  sys
 # mapa de estandarización de marcas 
 BRAND_STANDARD_MAP = {
-    "BLACK + DECKER": ["B+D", "BLACK&DECKER", "BLACKANDDECKER", "BLACK+DECKER®", "BLACK + DECKER","BLACK+DECKER"],
+    "Black + Decker": ["Black + Decker","Black+Decker","B+D", "BLACK&DECKER", "BLACKANDDECKER", "BLACK+DECKER®", "BLACK + DECKER","BLACK+DECKER"],
     "DEWALT": ["DEWALT®", "DWLT", "DEWALT"],
     "STANLEY": ["STANLEY®", "STANLEYTOOLS", "STANLEY"],
     "CRAFTSMAN": ["CRAFTSMAN", "CRAFTSMN", "CRAFTSMAN®"],
@@ -178,7 +178,7 @@ def main():
         'GPP Division Description', 'GPP Category Code',
         'GPP Category Description', 'GPP Portfolio Code',
         'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-        'Voltaje', 'Bare', 'Sub-Brand']
+        'Voltaje', 'Bare', 'Sub-Brand','Project Name','Dewalt XR']
 
         lst_col_md_product = [COL_KEY] + lst_colums_gpp + ['Brand Group', 'Brand + SBU', 'Group 1',
             'Group 2', 'Category Group', 'Big Rock', 'Top Category', 'NPI Project',

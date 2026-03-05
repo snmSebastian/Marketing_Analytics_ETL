@@ -15,7 +15,7 @@ import numpy as np
 import glob
 import os
 import sys
-
+import re
 from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
 
 def complete_clasification(df_consolidated, df_customers_shared, df_customers_clasifications, df_country):
@@ -177,7 +177,8 @@ def update_excel_file(df_master, df_consolidated,name='master_customers'):
         df_final=df_final.drop(columns=['fk_country_customer'])
     return df_final
 
-def notation_customers(df_update, df_notation_customers):
+
+def notation_name(df_update, df_notation_customers):
     """
     Aplica un mapeo de corrección para los nombres de clientes. Compara los nombres de los clientes en df_update contra
     una tabla de errores de notación. Si encuentra una coincidencia, reemplaza el nombre con la versión corregida;
@@ -191,32 +192,47 @@ def notation_customers(df_update, df_notation_customers):
     Returns:
         pd.DataFrame: El DataFrame df_update con los nombres de clientes corregidos.
     """
-    #  Preparación de llaves 
-    # Se crea la columna 'fk_customer' en ambos DataFrames, con la misma limpieza.
-    df_notation_customers['fk_customer'] = df_notation_customers['Text Condition'].str.upper().str.strip().str.replace(' ', '')
-    df_update['fk_customer'] = df_update['Sold-To Customer Name'].str.upper().str.strip().str.replace(' ', '')
+    # 1. Normalización (Mantenemos espacios para poder distinguir palabras)
+    df_update['fk_customer'] = df_update['Sold-To Customer Name'].str.upper().str.strip()
+    df_notation_customers['fk_key'] = df_notation_customers['Text Condition'].str.upper().str.strip()
     
-    # Crear un diccionario de mapeo
-    mapeo_clientes = df_notation_customers.set_index('fk_customer')['Result'].to_dict()
-    
-    # Aplicar el mapeo para obtener los NUEVOS NOMBRES
-    # Creamos una columna temporal con los nuevos nombres si se encuentran en el mapeo.
-    # Si un cliente no se encuentra en el diccionario 'mapeo_clientes', 
-    # Pandas devuelve NaN (Not a Number).
-    df_update['Nuevo Nombre'] = df_update['fk_customer'].map(mapeo_clientes)
+    # 2. Diccionarios por condición
+    df_c = df_notation_customers[df_notation_customers['Condition'] == 'Text Contains']
+    df_s = df_notation_customers[df_notation_customers['Condition'] == 'Text Stars']
+    df_i = df_notation_customers[df_notation_customers['Condition'] == 'Text Iqual']
 
-    # Actualizar la columna 'Sold-To Customer Name'
-    # Usamos .fillna() para reemplazar los valores NaN (clientes NO mapeados) 
-    # con su nombre original.
-    # Así, solo se actualizan los clientes que SÍ tenían un error de notación.
-    df_update['Sold-To Customer Name'] = df_update['Nuevo Nombre'].fillna(
-        df_update['Sold-To Customer Name']
-    )
+    dic_contains = dict(zip(df_c['fk_key'], df_c['Result']))
+    dic_starts = dict(zip(df_s['fk_key'], df_s['Result']))
+    dic_equal = dict(zip(df_i['fk_key'], df_i['Result']))
     
-    # Opcional: Eliminar la columna temporal
-    df_update.drop(columns=['Nuevo Nombre', 'fk_customer'], inplace=True)
-    
+    def find_match(row):
+        name = row['fk_customer']
+        original = row['Sold-To Customer Name']
+        if pd.isna(name): return original
+        
+        # 1. IGUALDAD EXACTA
+        if name in dic_equal:
+            return dic_equal[name]
+
+        # 2. EMPIEZA CON (Pero como palabra completa)
+        for key, value in dic_starts.items():
+            # r'^' indica inicio de cadena, r'\b' indica límite de palabra
+            # Esto hace que AMAZON coincida con "AMAZON CORP" pero NO con "AMAZONAS"
+            if re.search(r'^' + re.escape(key) + r'\b', name):
+                return value
+
+        # 3. CONTIENE (Como palabra completa en cualquier posición)
+        for key, value in dic_contains.items():
+            if re.search(r'\b' + re.escape(key) + r'\b', name):
+                return value
+        
+        return original
+
+    df_update['Sold-To Customer Name'] = df_update.apply(find_match, axis=1)
+    df_update.drop(columns=['fk_customer'], inplace=True)
     return df_update
+
+
 
 def main():
     """	
@@ -270,7 +286,7 @@ def main():
         df_update=update_excel_file(df_master,
                                     df_consolidated,
                                     name='master_customers')
-        df_update=notation_customers(df_update,df_notation_customers)
+        df_update=notation_name(df_update,df_notation_customers)
         df_update.to_excel(md_customers, index=False)
         print("Proceso de actualización de clientes completado exitosamente.")
         pass 

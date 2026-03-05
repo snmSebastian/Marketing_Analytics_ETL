@@ -68,7 +68,7 @@ def read_files(input_path):
 
     for col in df_consolidated.columns:
         df_consolidated[col] = df_consolidated[col].astype(str).str.upper().str.strip()
-
+    
     return df_consolidated
 
 # Asignacion pais

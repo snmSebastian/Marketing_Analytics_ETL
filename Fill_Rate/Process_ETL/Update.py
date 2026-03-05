@@ -10,6 +10,7 @@ import pandas as pd
 import glob
 import os
 import sys
+from pathlib import Path
 
 # Importamos las funciones ya creadas que usaremos nuevamente
 from .Process_Files import read_files, asign_country_code, process_columns, group_parquet, format_columns
@@ -72,6 +73,44 @@ def update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_c
         df_final = pd.concat([df_parquets_filtered, df_update], ignore_index=True)
     return df_final
 
+
+
+def delete_parquet_files(folder_path, lst_year_month_files_update):
+    """
+    Elimina archivos Parquet cuyos nombres coincidan con los periodos a actualizar.
+
+    Busca archivos con el patrón 'sales_{periodo}.parquet' para cada elemento en 
+    lst_year_month_files_update y los elimina del directorio especificado.
+
+    Args:
+        folder_path (str): Ruta del directorio de los archivos.
+        lst_year_month_files_update (list): Lista de periodos (ej. ['2025-01', '2024-12']).
+
+    Returns:
+        None
+    """
+    directory = Path(folder_path)
+    if not directory.is_dir():
+        print(f"Ruta no válida: {folder_path}")
+        return
+
+    count = 0
+    try:
+        for period in lst_year_month_files_update:
+            # Construir el patrón específico: sales_2025-01.parquet
+            file_pattern = f"sales_{period}.parquet"
+            for file in directory.glob(file_pattern):
+                file.unlink()
+                print(f"Archivo eliminado: {file.name}")
+                count += 1
+
+        print(f"--- Limpieza selectiva completada: {count} archivos eliminados. ✅ ---")
+
+    except Exception as e:
+        print(f"Error al eliminar archivos: {e}")
+        sys.exit(1)
+
+
 def main():
     """ 
     Orquesta el proceso de actualización incremental de Fill Rate.
@@ -107,6 +146,9 @@ def main():
                     'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
 
         df_update = read_files(fill_rate_update_raw_dir)
+        df_update = df_update[
+            ~df_update['Fiscal Year'].isin(['NAN', 'NONE', '', 'NAT'])
+        ]
         if df_update is None or df_update.empty:
             print("No hay archivos para actualizar. Finalizando proceso.")
             return
@@ -114,12 +156,14 @@ def main():
         df_update = asign_country_code(df_update, df_country)
         df_update = process_columns(df_update, lst_columns)
         
+
+
         # --- LECTURA Y ACTUALIZACIÓN DE DATOS HISTÓRICOS ---
         lst_year_month_files_update = df_update['fk_year_month'].unique().tolist()
+        delete_parquet_files(fill_rate_historic_processed_dir, lst_year_month_files_update)
+       
         
-        df_parquets_historic = read_parquets_to_update(fill_rate_historic_processed_dir, lst_year_month_files_update,lst_columns)
         
-        df_final = update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_customer_clasification')
         # Defino formato de las columnas
         lst_columns_str=['fk_Date', 'fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code',
         'fk_SKU', 'fk_date_country_customer_clasification']
@@ -128,7 +172,7 @@ def main():
         'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
         
         
-        df_final=format_columns(df_final,lst_columns_str,lst_columns_float)
+        df_final=format_columns(df_update,lst_columns_str,lst_columns_float)
         
         # --- ESCRITURA DE LOS DATOS ACTUALIZADOS ---
         group_parquet(df_final, fill_rate_historic_processed_dir,name='fill_rate')

@@ -30,15 +30,15 @@ def main():
             PROD_KEY as "Global Material",
             DMD_GRP_KEY as "Demand Group",
             LOC_KEY as "Plant Code",
-            gpp_basic_sbu_name as "SBU",
-            gpp_basic_div_name as "GPP Division Code",
-            dmd_gpp_ctgy_cd as "GPP Category Code",
-            dmd_gpp_basic_portfolio as "GPP Portfolio Code",
+            GPP_BASIC_SBU_NAME as "SBU",
+            DIV as "GPP Division Code",
+            DMD_GPP_CTGY_CD as "GPP Category Code",
+            DMD_GPP_BASIC_PORTFOLIO as "GPP Portfolio Code",
             FCST_QTY,
             FORECAST_VALUE_GSV,
             CURRENT_STANDARD_COST
                                 
-      FROM PROD_MARTS.DEMAND.VW_BRZ_DEMAND_HISTORY_FORECAST_TOOLS
+      FROM  PROD_MARTS.DEMAND.VW_BRZ_GLOBAL_FORECAST_SNAPSHOT
       WHERE FISCAL_PERIOD >= MONTH(CURRENT_DATE()) 
       AND FYR_ID >= YEAR(CURRENT_DATE()) 
      AND FYR_ID <=YEAR(CURRENT_DATE())+1

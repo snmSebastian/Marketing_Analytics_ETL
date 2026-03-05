@@ -23,7 +23,7 @@ from pathlib import Path
 import sys
 
 from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet,format_columns
-from Sales.Process_ETL.Process_Files import assign_nsv
+from Sales.Process_ETL.Process_Files import assign_nsv,assign_NPI_New_Carryover,assign_fk_YearRegionSku
 
 # Asgina pais segun el demand group
 def asign_country_code(df_consolidated, df_country):
@@ -47,6 +47,23 @@ def asign_country_code(df_consolidated, df_country):
         return df_consolidated
 
 def asign_gpp(df_consolidated, df_gpp):
+    """
+    Asigna GPP segun la clave compuesta 'fk_gpp' a cada registro.
+
+    Genera una clave temporal 'fk_gpp' concatenando códigos de división, categoría y portafolio 
+    para realizar un cruce (merge) y traer dimensiones descriptivas.
+
+    Args:
+        df_consolidated (pd.DataFrame): DataFrame principal que contiene las columnas de códigos: 
+            'GPP Division Code', 'GPP Category Code' y 'GPP Portfolio Code'.
+        df_gpp (pd.DataFrame): DataFrame de referencia de GPP que debe contener los códigos de 
+            mapeo y las columnas: 'GPP SBU', 'GPP Division Description', 
+            'GPP Category Description' y 'GPP Portfolio Description'.
+
+    Returns:
+        pd.DataFrame: El DataFrame consolidado enriquecido con las descripciones de GPP y 
+            sin la columna temporal de unión.
+    """
     df_gpp['fk_gpp']=df_gpp['GPP Division Code'] + '-' + df_gpp['GPP Category Code'] + '-' + df_gpp['GPP Portfolio Code']
     df_consolidated['fk_gpp']=df_consolidated['GPP Division Code'] + '-' + df_consolidated['GPP Category Code'] + '-' + df_consolidated['GPP Portfolio Code']
 
@@ -59,8 +76,23 @@ def asign_gpp(df_consolidated, df_gpp):
     return df_consolidated
 
 def asign_skuName(df_consolidated,df_skuName):
+    """
+    Asigna nombres de SKU y marcas al DataFrame consolidado mediante la clave 'fk_SKU'.
+
+    Limpia los nombres de las columnas, estandariza las llaves de unión y elimina 
+    duplicados en la referencia antes de realizar un merge por la izquierda.
+
+    Args:
+        df_consolidated (pd.DataFrame): Datos de demanda. Requiere columna 'Global Material'.
+        df_skuName (pd.DataFrame): Maestro de materiales. Requiere 'SKU', 'SKU Description' y 'BRAND'.
+
+    Returns:
+        pd.DataFrame: DataFrame enriquecido con 'SKU Description' y 'BRAND'.
+    """
     df_consolidated.columns = df_consolidated.columns.str.strip()
     df_skuName.columns = df_skuName.columns.str.strip()
+    print(df_consolidated.columns)
+    print(df_skuName.columns)
 
     df_consolidated.rename(columns={
             'Global Material': 'fk_SKU'}, inplace=True)
@@ -69,7 +101,7 @@ def asign_skuName(df_consolidated,df_skuName):
     df_skuName.drop_duplicates(subset=['fk_SKU'], inplace=True)
     df_consolidated=pd.merge(
         df_consolidated,
-        df_skuName[['fk_SKU','SKU Description','BRAND']],
+        df_skuName[['fk_SKU','SKU Description','Brand']],
         on='fk_SKU',
         how='left')
     return df_consolidated
@@ -102,8 +134,10 @@ def process_columns(df_consolidated,lst_columns):
         df_consolidated['fk_Date']=pd.to_datetime(df_consolidated['fk_year_month'],
                                                   format='%Y-%m',
                                                   errors='coerce')
+        df_consolidated.rename(columns={
+            'Global Material': 'fk_SKU'}, inplace=True)
         
-        
+       
         df_processed = df_consolidated[lst_columns].copy()                                                                                                                                                                           
         # Convertir todas las columnas a mayúsculas y eliminar espacios
         for col in df_processed.columns:        
@@ -133,6 +167,7 @@ def assign_local_currency(df_consolidated,df_fx_rate):
      cols_to_drop = ['fk_YearMonthCountry','OP Rate']
      df_consolidated.drop(columns=[col for col in cols_to_drop if col in df_consolidated.columns], inplace=True)
      return df_consolidated    
+
 
 
 def delete_parquet_files(folder_path: str):
@@ -196,12 +231,14 @@ def main():
     path_sku_name=MasterProductsPaths.INPUT_RAW_SkuName_FILE
     processed_gross_to_net=DemandPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
     md_product_processed_file=DemandPaths.INPUT_PROCESSED_MASTER_PRODUCTS_FILE
+    npi=DemandPaths.INPUT_PROCESSED_NPI_FILE
 
      #===============================
     # --- Lectura de archivos 
     #===============================
     # Leer los archivos de datos históricos y consolidarlos en un DataFrame.
     df_consolidated = pd.read_parquet(demand_update_raw_dir/'QueryDemand.parquet', engine='pyarrow')
+    print(df_consolidated.columns)
     len_initial=len(df_consolidated)
 
     # Leer el archivo de códigos de país.
@@ -216,27 +253,41 @@ def main():
 
     df_md_product=pd.read_excel(md_product_processed_file,dtype=str, engine='openpyxl')
     df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
+    df_npi=pd.read_excel(npi,sheet_name='Database',dtype=str, engine='openpyxl')
 
     # Definir las columnas relevantes para el procesamiento.    
-    lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','BRAND',
+    lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand',
                    'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description',
                   'FCST_QTY', 'FORECAST_VALUE_GSV','CURRENT_STANDARD_COST']
     df_consolidated = asign_country_code(df_consolidated, df_country)
+    print('assing country')
     df_consolidated=asign_gpp(df_consolidated,df_gpp)
+    print('gpp')
     df_consolidated=asign_skuName(df_consolidated,df_skuName)
+    print('skuname')
     df_processed=process_columns(df_consolidated,lst_columns)
-
+    print('columns')
     #---ASING NSV
     df_processed.rename(columns={'FORECAST_VALUE_GSV':'Total Sales'},inplace=True)
     df_processed=assign_nsv(df_processed, df_md_product, df_gross_to_net,df_country_nsv)
     df_processed.rename(columns={'Total Sales':'FORECAST_VALUE_GSV'},inplace=True)
     
+    df_processed=assign_NPI_New_Carryover(df_processed,df_npi,df_country_nsv)
+    print(f'longitud posterior a asignación NPI: {len(df_processed)}')
+
+    df_processed=assign_fk_YearRegionSku(df_processed,df_country_nsv)
+    print(f'longitud posterior a asignación fk_YearRegionSku: {len(df_processed)}')
+
+
 
     #--- Formato de columnas ----
-    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','BRAND',
-                       'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description']
+    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand',
+                       'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description',
+                       'New New/Carryover',
+                       'fk_YearRegionSku']
     lst_columns_float=['FCST_QTY', 'FORECAST_VALUE_GSV','NSV',
-                  'CURRENT_STANDARD_COST']
+                  'CURRENT_STANDARD_COST',
+                  'NPI Incremental Sales $']
     df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
     #=========================================================
     #--- ASIGNACIÓN COLUMNAS CALCULADAS

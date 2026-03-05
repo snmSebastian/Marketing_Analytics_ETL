@@ -14,65 +14,124 @@ import sys
 # La importación debe ser relativa al paquete actual.
 from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet,format_columns
 from Fill_Rate.Process_ETL.Update import read_parquets_to_update,update_parquets
-from Demand.Process_ETL.Process_Files import asign_country_code, process_columns
+from Demand.Process_ETL.Process_Files import *
 
 def main():
-    """
-    Orquesta el flujo de actualización incremental para los datos de Demanda.
-        1. Procesa los archivos brutos de la actualización utilizando la lógica de transformación de Demand.
-        2. Determina los periodos afectados.
-        3. Aplica el Upsert utilizando la clave única 'fk_date_country_clasification'.
-        4. Guarda los archivos Parquet actualizados, sobrescribiendo los periodos históricos.
-    Returns: None: La función orquesta el proceso y no devuelve un valor.
-    """
     print("=" * 55)
-    print("---  INICIANDO PROCESO: DEMAND UPDATE ETL ---")
+    print("---  INICIANDO PROCESO: DEMAND FULL LOAD ETL ---")
     print("=" * 55)
-    # --- CONFIGURACIÓN DE RUTAS ---
-    try:
-        from config_paths import DemandPaths
-        demand_historic_processed_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
-        #demand_historic_processed_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA
-        
-        demand_update_raw_dir = DemandPaths.INPUT_RAW_UPDATE_DIR
-        country_code_file = DemandPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
-        
-        # --- PROCESAMIENTO DE ARCHIVOS DE ACTUALIZACIÓN ---
-        df_country = pd.read_excel(country_code_file,
-                                sheet_name='Code Country Demand', dtype=str, engine='openpyxl')
-        lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU',
-                    'fk_date_country_clasification',
-                    'Demand History & Forecast-QTY', 'Shipment History& Forecast-Qty',
-                    'Demand History & Forecast-GSV', 'Shipment History&Forecast-GSV']
-        df_update = read_files(demand_update_raw_dir)
-        if df_update is None or df_update.empty:
-            print("No hay archivos para actualizar. Finalizando proceso.")
-            return
+    """
+    Orquesta el flujo ETL de Carga Completa (Full Load) para los datos de Demanda.
 
-        df_update = asign_country_code(df_update, df_country)
-        df_update = process_columns(df_update, lst_columns)
+    Este proceso consolida la extracción de Snowflake con maestros externos para generar 
+    el dataset final procesado y particionado.
 
-        # --- LECTURA Y ACTUALIZACIÓN DE DATOS HISTÓRICOS ---
-        lst_year_month_files_update = df_update['fk_year_month'].unique().tolist()
-        df_parquets_historic = read_parquets_to_update(demand_historic_processed_dir, lst_year_month_files_update,lst_columns)
-        
-        df_final = update_parquets(df_parquets_historic, df_update,fk_column='fk_date_country_clasification')
-        #--- Formato de columnas ----
-        lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU',
-                    'fk_date_country_clasification']
-        lst_columns_float=['Demand History & Forecast-QTY', 'Shipment History& Forecast-Qty',
-                    'Demand History & Forecast-GSV', 'Shipment History&Forecast-GSV']
-        
-        df_final=format_columns(df_final,lst_columns_str,lst_columns_float)
-        
-        # --- ESCRITURA DE LOS DATOS ACTUALIZADOS ---
-        group_parquet(df_final, demand_historic_processed_dir,name='demand')
-        print("Demand ETL Update completed successfully.")
-        pass
-    except Exception as e:
-        print(f"Error en Demand ETL Update: {e}")
-        sys.exit(1)
+    Pasos del flujo:
+        1. Carga de dependencias: Rutas, archivos de mapeo (Country, GPP, SKU) y maestros (NPI, NSV).
+        2. Enriquecimiento: Asigna códigos de país, dimensiones GPP y nombres de SKU.
+        3. Cálculo Financiero: Transforma GSV a NSV y calcula ventas incrementales de NPI.
+        4. Estandarización: Aplica formatos de datos (string/float) y genera llaves de auditoría.
+        5. Persistencia: Limpia el directorio de salida y guarda el resultado en formato Parquet.
+
+    Returns:
+        None
+    """
+    # Importar las rutas de acceso rápido desde config_paths.py.,
+    from config_paths import DemandPaths,MasterProductsPaths
+    demand_update_raw_dir = DemandPaths.INPUT_RAW_UPDATE_DIR
+    country_code_file = DemandPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
+    processed_parquet_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
+    fx_rate=DemandPaths.INPUT_PROCESSED_FX_RATE_FILE
+    path_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
+    path_sku_name=MasterProductsPaths.INPUT_RAW_SkuName_FILE
+    processed_gross_to_net=DemandPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
+    md_product_processed_file=DemandPaths.INPUT_PROCESSED_MASTER_PRODUCTS_FILE
+    npi=DemandPaths.INPUT_PROCESSED_NPI_FILE
+
+     #===============================
+    # --- Lectura de archivos 
+    #===============================
+    # Leer los archivos de datos históricos y consolidarlos en un DataFrame.
+    df_consolidated = pd.read_parquet(demand_update_raw_dir/'QueryDemand.parquet', engine='pyarrow')
+    len_initial=len(df_consolidated)
+
+    # Leer el archivo de códigos de país.
+    df_country = pd.read_excel(country_code_file,
+                               sheet_name='Code Country Demand', dtype=str, engine='openpyxl')
+    df_country_nsv = pd.read_excel(country_code_file,
+                               sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+    
+    #df_fx_rate = pd.read_excel(fx_rate, dtype=str, engine='openpyxl')
+    df_gpp=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='GPP')
+    df_skuName=pd.read_parquet(path_sku_name, engine='pyarrow')
+
+    df_md_product=pd.read_excel(md_product_processed_file,dtype=str, engine='openpyxl')
+    df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
+    df_npi=pd.read_excel(npi,sheet_name='Database',dtype=str, engine='openpyxl')
+
+    # Definir las columnas relevantes para el procesamiento.    
+    lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand',
+                   'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description',
+                  'FCST_QTY', 'FORECAST_VALUE_GSV','CURRENT_STANDARD_COST']
+    df_consolidated = asign_country_code(df_consolidated, df_country)
+    #print('assing country')
+    df_consolidated=asign_gpp(df_consolidated,df_gpp)
+    #print('gpp')
+    df_consolidated=asign_skuName(df_consolidated,df_skuName)
+    #print('skuname')
+    df_processed=process_columns(df_consolidated,lst_columns)
+    #print('columns')
+    #---ASING NSV
+    df_processed.rename(columns={'FORECAST_VALUE_GSV':'Total Sales'},inplace=True)
+    df_processed=assign_nsv(df_processed, df_md_product, df_gross_to_net,df_country_nsv)
+    df_processed.rename(columns={'Total Sales':'FORECAST_VALUE_GSV'},inplace=True)
+    
+    df_processed=assign_NPI_New_Carryover(df_processed,df_npi,df_country_nsv)
+    #print(f'longitud posterior a asignación NPI: {len(df_processed)}')
+
+    df_processed=assign_fk_YearRegionSku(df_processed,df_country_nsv)
+    #print(f'longitud posterior a asignación fk_YearRegionSku: {len(df_processed)}')
 
 
+
+    #--- Formato de columnas ----
+    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand',
+                       'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description',
+                       'New New/Carryover',
+                       'fk_YearRegionSku']
+    lst_columns_float=['FCST_QTY', 'FORECAST_VALUE_GSV','NSV',
+                  'CURRENT_STANDARD_COST',
+                  'NPI Incremental Sales $']
+    df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
+    #=========================================================
+    #--- ASIGNACIÓN COLUMNAS CALCULADAS
+    #=========================================================
+    #df_consolidated=assign_local_currency(df_consolidated,df_fx_rate)
+    len_end=len(df_processed)
+    if len_initial==len_end:
+        print(f'{"="}*50')
+        print(f'El DataFrame procesado tiene la misma longitud que el DataFrame original')
+        print(f'{"="}*50')
+    else:
+        print(f'{"="}*50')
+        print(f'El DataFrame procesado tiene una longitud diferente que el DataFrame original')
+        print(f'El dataframe original tiene {len_initial} registros y el dataframe procesado tiene {len_end} registros')
+        print(f'la diferencia es de {len_initial-len_end} registros')
+        print(f'{"="}*50')
+    #=========================================================
+    #--- ACTUALIZACION CARPETA
+    #=========================================================
+    #---- Elimina todos los archivos existentes
+    delete_parquet_files(processed_parquet_dir)
+    # --- Agrupacion en archivos parquets
+    group_parquet(df_processed, processed_parquet_dir,name='demand')
+
+
+# --- EJECUCION DEL SCRIPT ---
+# Es una buena práctica envolver la ejecución principal en un bloque if __name__ == "__main__":
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        print("Script de procesamiento de archivos historicos de Demand ejecutado correctamente.")
+    except Exception as e:
+        print(f"Error en procesamiento de archivos historicos de Demand: {e}")

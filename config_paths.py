@@ -87,13 +87,14 @@ PATHS_CONFIG = {
             "Sku_for_Review": RAW_DATA_DIR / 'Products' / 'Sku_for_Review.xlsx',
             "hts_products": RAW_DATA_DIR / 'Products' / 'working_files_for_pwt_hts_products'/'HTS_Classification_Workfile.xlsx',
             "pwt_products": RAW_DATA_DIR / 'Products' / 'working_files_for_pwt_hts_products'/'PWT_Classification_Workfile.xlsx',
-            "SkuName": RAW_DATA_DIR / 'Products' / 'other' /'QuerySkuName.parquet'
+            "SkuName": RAW_DATA_DIR / 'Products' / 'other' /'QuerySkuName.parquet',
+            "ConsultaSKU": RAW_DATA_DIR / 'Products' / 'other' /'ConsultaSKU.xlsx'
                 
         },
         "Processed": {
             "GPP_Brand": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'GPP-Brand.xlsx',
             "Master_Product": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'Master_Product.xlsx',
-            "Master_Product_Prueba": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'Master_Product_Prueba.xlsx',
+            "Proyects": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'Proyects.xlsx'
             
         }
     },
@@ -196,10 +197,15 @@ class MasterProductsPaths:
     OUTPUT_PROCESSED_PARQUETS_DIR: Path = PATHS_CONFIG['Demand']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS']
     INPUT_RAW_UPDATE_FILL_RATE_DIR: Path = PATHS_CONFIG['FillRate']['Raw']['Mothly_Update']
     INPUT_RAW_UPDATE_SALES_DIR: Path = PATHS_CONFIG['Sales']['Raw']['Mothly_Update'] 
+    INPUT_RAW_UPDATE_DEMAND_DIR: Path =  PATHS_CONFIG['Demand']['Raw']['Mothly_Update']
+
     INPUT_RAW_SHARED_PSD_FILE: Path = PATHS_CONFIG['Master_Products']['Raw']['sku_shared_of_PSD']
     INPUT_RAW_SkuName_FILE: Path = PATHS_CONFIG['Master_Products']['Raw']['SkuName']
+    INPUT_RAW_ConsultaSKU_FILE: Path = PATHS_CONFIG['Master_Products']['Raw']['ConsultaSKU']
     
     INPUT_PROCESSED_GPP_BRAND_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['GPP_Brand']
+    INPUT_PROCESSED_PROYECTS_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['Proyects']
+
     #___________________
     # --- OUTPUTS -------
     #___________________
