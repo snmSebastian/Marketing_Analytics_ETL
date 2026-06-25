@@ -1,8 +1,33 @@
 """
-Módulo de funciones de transformación (T) para la construcción y enriquecimiento del Maestro de Productos (Master Products).
-Contiene la lógica central para identificar nuevos SKUs de las fuentes de datos (Fill Rate, Sales, Demand),
-clasificar estos SKUs (asignación de SKU Base, GPP, Corded/Cordless, Bare, etc.) y generar una tabla
-de revisión para el analista.
+EL DETECTOR DE IDENTIDADES: CONSULTA ON-DEMAND DE SKUS
+-----------------------------------------------------
+Este script es la "navaja suiza" para cuando marketing o ventas nos tiran una lista de 
+códigos extraños y nos preguntan: "¿Y esto qué es?". En lugar de buscar uno por uno en 
+SAP, Snowflake o Exceles viejos, este proceso les pone nombre, apellido y familia de 
+forma automática. 
+
+Es básicamente un simulador de clasificación que no ensucia el Maestro principal, 
+pero te da todas las respuestas en un solo reporte.
+
+FLUJO DE TRABAJO:
+1. Carga de Pedidos: Recibe el archivo de consulta con los SKUs que están en el "limbo".
+2. Cruce con la Nube: Escanea Snowflake para traer la jerarquía oficial (GPP) que 
+   vive en el sistema global.
+3. Rastreo Genético: Busca si el SKU tiene un "hermano mayor" (SKU Base) ya conocido 
+   para heredarle sus propiedades y mantener la coherencia.
+4. Análisis de ADN Técnico: Desmenuza las descripciones para detectar si el equipo 
+   usa batería, qué voltaje tiene y si viene con accesorios o es una herramienta "nuda" (Bare).
+5. Reporte de Acción: Escupe un Excel listo para que el analista valide y tome 
+   decisiones sin romperse la cabeza.
+
+💡 NOTA DE SENIOR:
+Este script consume casi toda su lógica de `column_processing.py`. Si notas que una 
+regla de voltaje o marca está fallando aquí, **no la arregles en este archivo**; 
+vete directo al módulo core. Si lo arreglas allá, mejoras este buscador y de paso 
+todo el pipeline regional. ¡Doble win!
+
+Asigna informacion primero tomando de datalake luego por sku base
+
 """
 
 #---------------- LIBRERIAS -----------------------
@@ -18,7 +43,7 @@ import os
 import pandas as pd
 from typing import List, Union
 
-from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
+from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files,clean_sku
 from Master_Products.column_processing import *
 
 def main():
@@ -34,7 +59,7 @@ def main():
                    guardando el resultado en un archivo Excel        
     """
     print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
+    print("--- 🔄 INICIANDO PROCESO: CONSULTA  SKU ---")
     print("=" * 55)
     #-------------------------------
     #---- RUTAS DE LOS ARCHIVOS
@@ -53,7 +78,8 @@ def main():
     path_psd=MasterProductsPaths.INPUT_RAW_SHARED_PSD_FILE
     path_sku_snowflake=MasterProductsPaths.INPUT_RAW_SkuName_FILE
     path_proyects=MasterProductsPaths.INPUT_PROCESSED_PROYECTS_FILE
-   
+    path_result_ConsultSku=MasterProductsPaths.INPUT_RAW_Result_ConsultaSKU_FILE
+
     #path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
     path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE
     
@@ -75,6 +101,17 @@ def main():
     df_snowflake=pd.read_parquet(path_sku_snowflake, engine='pyarrow')
     df_proyects=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='Proyects')
     df_dewaltXR=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='DW_XR')
+
+    #================
+    # limpieza sku
+    #=================
+    df_consultaSku=clean_sku(df_consultaSku,'SKU')
+    df_master_products=clean_sku(df_master_products,'SKU')
+    df_new_products=clean_sku(df_new_products,'SKU')
+    df_psd=clean_sku(df_psd,'SKU')
+    df_snowflake=clean_sku(df_snowflake,'SKU')
+    df_proyects=clean_sku(df_proyects,'SKU')
+    df_dewaltXR=clean_sku(df_dewaltXR,'SKU')
     
     #---------------------------------------------------
     #--- Genero el archivo con los nuevos productos
@@ -109,8 +146,7 @@ def main():
     columns_merge = ['SKU Description', 'Brand','GPP SBU',
         'GPP Division Code',
         'GPP Category Code',
-        'GPP Portfolio Code',
-        'Corded / Cordless'
+        'GPP Portfolio Code'
     ]
     df_new_products.loc[:, columns_merge] = np.nan
     df_new_products = assign_info_by_key(
@@ -216,11 +252,11 @@ def main():
     
     # Asigno la cantidad de baterías a los nuevos productos
     df_new_products_gpp['Batteries Qty'] = df_new_products_gpp.apply(
-        lambda row: assing_qty_batteries(row['SKU'], row['SKU Description'], row['Batteries Qty']), axis=1)
+        lambda row: assing_qty_batteries(row['SKU']), axis=1)
     
     # Asigno el voltaje a los nuevos productos
     df_new_products_gpp['Voltaje'] = df_new_products_gpp.apply(
-        lambda row: assing_voltaje(row['SKU Description'], row['Voltaje']), axis=1)
+        lambda row: assing_voltaje(row['SKU Description']), axis=1)
     
     # Asigno el valor de Bare a los nuevos productos
     df_new_products_gpp['Bare'] = df_new_products_gpp.apply(
@@ -240,9 +276,9 @@ def main():
     
 
     # Exporto a excel el dataframe de nuevos productos
-    path_result_ConsultSku=r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Products\other\ResultConsultSku.xlsx'
+    # path_result_ConsultSku=r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Products\other\ResultConsultSku.xlsx'
     df_review_products.to_excel(path_result_ConsultSku, index=False)
 
 if __name__ == "__main__":
     main()
-    print("Proceso de actualización de productos completado exitosamente.")
+    print("Proceso de consulta de productos completado exitosamente.")

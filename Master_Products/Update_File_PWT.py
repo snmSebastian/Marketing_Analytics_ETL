@@ -1,13 +1,35 @@
 """
-Módulo de orquestación y validación para la clasificación PWT (Power Tools o similar).
-Este script revisa el Maestro de Productos ('md_product') filtrando solo los SKUs de la
-unidad de negocio PWT y valida si sus atributos de clasificación específicos ('Group 1', 'Group 2')
-están completos, utilizando un archivo de trabajo ('df_pwt') como referencia.
-Genera el archivo de trabajo PWT para la revisión manual.
+EL CENTINELA DE POWER TOOLS: FILTRO DE CALIDAD PWT/FAS
+-----------------------------------------------------
+Este script es el filtro de seguridad para que el reporte de Power Tools no sea un caos. 
+Su misión es encontrar SKUs de PWT y FAS (especialmente de DEWALT) que están "volando" 
+sin una clasificación de 'Group 1' o 'Group 2' adecuada. 
+
+Básicamente, le ahorra horas al analista diciéndole exactamente qué productos nuevos 
+entraron al sistema o cuáles tienen datos incompletos que arruinarían las gráficas de ventas.
+
+FLUJO DE TRABAJO:
+1. Selección de Élite: Filtra el Maestro de Productos para quedarse solo con lo que 
+   importa aquí: SBUs de Power Tools (PWT) o Fastening (FAS) bajo la marca DEWALT.
+2. Cruce de Identidad: Compara contra el archivo de trabajo histórico para ver quién 
+   es un "New SKU" y quién ya estaba en el radar.
+3. Detector de Vacíos: Escanea las columnas 'Group 1' y 'Group 2'. Si encuentra el 
+   famoso guion "-", levanta una bandera de "Revisión: Faltan datos".
+4. Entrega de Tareas: Genera un Excel ordenado por prioridad para que el equipo de 
+   Marketing solo rellene lo que falta.
+
+💡 NOTA DE SENIOR:
+¡Cuidado con los filtros! Este script tiene "hardcodeado" que solo mira DEWALT y 
+ciertas SBUs. Si mañana el negocio pide incluir Stanley o Black+Decker en este 
+flujo de PWT, vas a tener que ajustar la lógica en `update_file_pwt`. 
+Además, recuerda que este archivo *sobrescribe* el workfile, así que asegúrate 
+de que nadie lo tenga abierto o el script va a tronar por permisos de Excel.
 """
 import pandas as pd
 import numpy as np
 import sys
+from Fill_Rate.Process_ETL.Process_Files import clean_sku
+
 def update_file_pwt(md_product,lst_columns_pwt,df_pwt):
     """
     Filtra el Maestro de Productos por la SBU 'PWT' y realiza una validación de calidad sobre sus columnas de clasificación
@@ -25,7 +47,7 @@ def update_file_pwt(md_product,lst_columns_pwt,df_pwt):
              verificación y la necesidad de revisión.
     """
     df_filter_pwt=md_product[((md_product['GPP SBU']=='PWT') | (md_product['GPP SBU']=='FAS')) &
-                             (md_product['Brand']=='Dewalt')][lst_columns_pwt].copy()
+                             (md_product['Brand'].str.upper()=='DEWALT')][lst_columns_pwt].copy()
     mask_sku_md=df_filter_pwt['SKU'].isin(df_pwt['SKU'])
     df_filter_pwt['check_sku']=np.where(
                                 mask_sku_md, 
@@ -65,6 +87,14 @@ def main():
         'GPP Category Description', 'GPP Portfolio Description','Group 1','Group 2']
         df_pwt=pd.read_excel(path_pwt, dtype=str, engine='openpyxl')
         df_md_product=pd.read_excel(path_md_product, dtype=str, engine='openpyxl')
+        
+
+        #------------------------
+        #-- limpieza sku
+        #---------------------
+        df_pwt=clean_sku(df_pwt,'SKU')
+        df_md_product=clean_sku(df_md_product,'SKU')
+
         
         df_update_pwt=update_file_pwt(df_md_product,lst_columns_pwt,df_pwt)
         df_update_pwt.to_excel(path_pwt, index=False)

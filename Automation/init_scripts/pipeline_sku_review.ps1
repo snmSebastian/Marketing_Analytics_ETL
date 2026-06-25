@@ -1,7 +1,19 @@
+"""
+Automatización para el Programador de Tareas: Prepara el entorno virtual (venv) y 
+lanza el pipeline modular 'pipeline_QuerySku_review.py' que procesa:
+
+ - Master_Products.Generate_sku_review
+
+
+El script garantiza que la consola use UTF-8 para evitar errores de lectura, 
+ejecuta el código de Python y, al finalizar, valida el código de salida ($LASTEXITCODE) 
+para enviarte una notificación por correo confirmando si la carga fue exitosa o si 
+el proceso falló en algún punto.
+"""
 
 # ---  Definir la ubicación del proyecto ---
 #$ProjectRoot = "C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts"
-$ProjectRoot = "C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts"
+$ProjectRoot = "C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Scripts"
 $PythonExe = "$ProjectRoot\venv_Scripts_RMA\Scripts\python.exe"
 
 # ---  Cambiar al Directorio de Trabajo ---

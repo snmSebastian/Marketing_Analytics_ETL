@@ -1,10 +1,22 @@
 """
-Módulo de orquestación para el proceso de Actualización Incremental (Upsert) de los datos de Demanda (Demand).
-Este script construye el pipeline de actualización combinando:
-1. Funciones de Lectura/Carga genéricas del módulo Fill_Rate.
-2. Lógica de Mapeo y Transformación específica de Demanda (asign_country_code, process_columns) definida localmente.
-Esto garantiza una actualización eficiente y adaptada a la estructura de datos de Demand."""
+ETL DE DEMANDA: Motor de Procesamiento y Carga (Full Load).
 
+Este módulo es el responsable de transformar la data cruda de Snowflake en un dataset 
+listo para análisis regional. Orquesta el enriquecimiento de datos, cálculos financieros 
+y la limpieza de archivos para garantizar una carga fresca y precisa.
+
+¿Qué hace este pipeline?
+ 1. EXTRACCIÓN Y CRUCE: Consolida la data de Snowflake con maestros externos (Países, GPP, SKU Name).
+ 2. CÁLCULO FINANCIERO: Ejecuta la conversión de GSV a NSV y calcula las ventas incrementales de NPI.
+ 3. ESTANDARIZACIÓN: Limpia formatos (string/float) y genera llaves de auditoría (fk_YearRegionSku).
+ 4. CONTROL DE CALIDAD: Compara la cantidad de registros iniciales vs. finales para asegurar 
+    que no se perdió información en el camino.
+ 5. ACTUALIZACIÓN: Limpia el histórico previo y guarda el resultado particionado en formato Parquet.
+
+Componentes:
+ - Utiliza funciones core de 'Fill_Rate' para la gestión de archivos.
+ - Aplica lógica específica de 'Demand' para transformaciones de negocio.
+"""
 
 # Librerias
 import pandas as pd
@@ -12,9 +24,10 @@ import glob
 import os
 import sys
 # La importación debe ser relativa al paquete actual.
-from Fill_Rate.Process_ETL.Process_Files import read_files, group_parquet,format_columns
-from Fill_Rate.Process_ETL.Update import read_parquets_to_update,update_parquets
+from Fill_Rate.Process_ETL.Process_Files import  group_parquet,format_columns
 from Demand.Process_ETL.Process_Files import *
+from Sales.Process_ETL.Process_Files import assign_fk_YearRegionSku
+
 
 def main():
     print("=" * 55)
@@ -38,6 +51,7 @@ def main():
     """
     # Importar las rutas de acceso rápido desde config_paths.py.,
     from config_paths import DemandPaths,MasterProductsPaths
+    from Fill_Rate.Process_ETL.Process_Files import clean_sku
     demand_update_raw_dir = DemandPaths.INPUT_RAW_UPDATE_DIR
     country_code_file = DemandPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
     processed_parquet_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
@@ -69,33 +83,44 @@ def main():
     df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
     df_npi=pd.read_excel(npi,sheet_name='Database',dtype=str, engine='openpyxl')
 
+    #=========================================
+    #Limpieza sku
+    #=========================================
+    df_md_product=clean_sku(df_md_product,'SKU')
+    df_npi=clean_sku(df_npi,'SKU')
+    df_skuName=clean_sku(df_skuName,'SKU')
+
+
+
     # Definir las columnas relevantes para el procesamiento.    
-    lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand',
+    lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand','Demand Group','Plant Code',
                    'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description',
                   'FCST_QTY', 'FORECAST_VALUE_GSV','CURRENT_STANDARD_COST']
     df_consolidated = asign_country_code(df_consolidated, df_country)
-    #print('assing country')
+    print(f'assing country {len(df_consolidated)}')
     df_consolidated=asign_gpp(df_consolidated,df_gpp)
-    #print('gpp')
+    print(f'assing gpp {len(df_consolidated)}')
     df_consolidated=asign_skuName(df_consolidated,df_skuName)
-    #print('skuname')
+    print(f'assing skuName {len(df_consolidated)}')
     df_processed=process_columns(df_consolidated,lst_columns)
-    #print('columns')
+    print(f'assing columns {len(df_processed)}')
+
     #---ASING NSV
     df_processed.rename(columns={'FORECAST_VALUE_GSV':'Total Sales'},inplace=True)
     df_processed=assign_nsv(df_processed, df_md_product, df_gross_to_net,df_country_nsv)
     df_processed.rename(columns={'Total Sales':'FORECAST_VALUE_GSV'},inplace=True)
-    
+    print(f'longitud posterior a asignación NSV: {len(df_processed)}')
+   
     df_processed=assign_NPI_New_Carryover(df_processed,df_npi,df_country_nsv)
-    #print(f'longitud posterior a asignación NPI: {len(df_processed)}')
+    print(f'longitud posterior a asignación NPI: {len(df_processed)}')
 
     df_processed=assign_fk_YearRegionSku(df_processed,df_country_nsv)
-    #print(f'longitud posterior a asignación fk_YearRegionSku: {len(df_processed)}')
+    print(f'longitud posterior a asignación fk_YearRegionSku: {len(df_processed)}')
 
 
 
     #--- Formato de columnas ----
-    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand',
+    lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand','Demand Group','Plant Code',
                        'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description',
                        'New New/Carryover',
                        'fk_YearRegionSku']
@@ -103,26 +128,31 @@ def main():
                   'CURRENT_STANDARD_COST',
                   'NPI Incremental Sales $']
     df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
+    df_processed.columns
     #=========================================================
     #--- ASIGNACIÓN COLUMNAS CALCULADAS
     #=========================================================
     #df_consolidated=assign_local_currency(df_consolidated,df_fx_rate)
     len_end=len(df_processed)
     if len_initial==len_end:
-        print(f'{"="}*50')
+        print("=" * 55)
         print(f'El DataFrame procesado tiene la misma longitud que el DataFrame original')
-        print(f'{"="}*50')
+        print("=" * 55)
     else:
-        print(f'{"="}*50')
+        print("=" * 55)
         print(f'El DataFrame procesado tiene una longitud diferente que el DataFrame original')
         print(f'El dataframe original tiene {len_initial} registros y el dataframe procesado tiene {len_end} registros')
         print(f'la diferencia es de {len_initial-len_end} registros')
-        print(f'{"="}*50')
+        print("=" * 55)
+        
     #=========================================================
     #--- ACTUALIZACION CARPETA
     #=========================================================
     #---- Elimina todos los archivos existentes
-    delete_parquet_files(processed_parquet_dir)
+    '''
+    Este paso se comento para poder tener un historico de demanda del año en curso.
+    '''
+    #delete_parquet_files(processed_parquet_dir)
     # --- Agrupacion en archivos parquets
     group_parquet(df_processed, processed_parquet_dir,name='demand')
 
@@ -132,6 +162,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-        print("Script de procesamiento de archivos historicos de Demand ejecutado correctamente.")
+        print("Script de procesamiento de Demand ejecutado correctamente.")
     except Exception as e:
-        print(f"Error en procesamiento de archivos historicos de Demand: {e}")
+        print(f"Error en procesamiento de Demand: {e}")

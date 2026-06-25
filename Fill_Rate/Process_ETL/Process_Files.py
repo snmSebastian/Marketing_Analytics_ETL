@@ -1,16 +1,27 @@
-'''
-Módulo de procesamiento principal para datos de Fill Rate.
-Este script implementa el flujo ETL (Extracción, Transformación y Carga)
-para consolidar archivos históricos de Fill Rate, asignar códigos de país,
-realizar transformaciones clave y guardar los datos limpios en formato Parquet
-particionado por año-mes.
+"""
+LIBRERÍA CENTRAL DE PROCESAMIENTO: Módulo Core de Fill Rate y Utilidades Compartidas.
 
-Contiene las siguientes funciones:
-- read_files: Lee archivos Excel de un directorio y los consolida en un DataFrame   
-- asign_country_code: Asigna el código de país a cada fila del DataFrame df usando el DataFrame country como referencia.
-- process_columns: Procesa las columnas relevantes del DataFrame df y las convierte a mayúsculas.
-- group_parquet: Guarda un DataFrame consolidado en archivos Parquet segmentados por año-mes.
-'''
+Este script es el pilar técnico del proyecto. No solo procesa el ETL de Fill Rate, 
+sino que funciona como la "Caja de Herramientas" oficial para Demand y Sales.
+
+¿Por qué es el archivo más importante?
+ • Centralización: Aquí viven 'group_parquet' y 'format_columns', funciones que 
+   usan los demás módulos para garantizar que todos los datos tengan el mismo formato.
+ • Resiliencia: La lectura de archivos (read_files) gestiona errores de permisos y 
+   bloqueos de Excel, evitando que el pipeline se detenga por un archivo abierto.
+ • Eficiencia: Al segmentar en Parquet por año-mes, transformamos procesos pesados 
+   en consultas ultrarrápidas para Power BI.
+
+Funciones que exporta a otros módulos:
+ • format_columns: (Usada por Demand y Sales) Estandariza tipos de datos y limpieza.
+ • group_parquet: (Usada por Demand y Sales) El estándar oficial de guardado particionado.
+ • read_files: (Usada por Demand) El motor de consolidación de históricos.
+
+💡 NOTA DE ARQUITECTURA: Cualquier cambio en estas funciones core se reflejará 
+automáticamente en Demand y Sales. ¡Cuidado al editar, es el motor compartido!
+"""
+
+
 
 #--------------------------------------------------
 #---------------- LIBRERIAS -----------------------
@@ -89,6 +100,7 @@ def asign_country_code(df_consolidated, df_country):
         """
         # Crear una columna 'code concat country' que concatena 'Country Code' y 'Destination Country'
         df_consolidated['code concat country'] = df_consolidated['Country Code'].astype(str) + df_consolidated['Destination Country'].astype(str)
+        df_consolidated['code concat country'] = df_consolidated['code concat country'].str.upper().str.strip()
 
         # Crear un mapa de códigos de país a nombres de país
         for col in df_country.columns:
@@ -101,14 +113,14 @@ def asign_country_code(df_consolidated, df_country):
         '''ESTA LINEA SE PUEDE ELIMINAR, ES PARA VER CUAL PAIS SE QUEDO SIN ASIGNACION
         
         '''
-        df_consolidated['pais']=df_consolidated['code concat country']+'-'+df_consolidated['fk_Country']
+        #df_consolidated['pais']=df_consolidated['code concat country']+'-'+df_consolidated['fk_Country']
         
-        paises_unicos = df_consolidated['pais'].unique()
-        df_paises = pd.DataFrame(paises_unicos, columns=['code concat country-fk_Country'])
-        df_paises.to_excel(
-            r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Shared_Information_for_Projects\Country\result-code concat country-fk_Country.xlsx', 
-            index=False
-        )
+        #paises_unicos = df_consolidated['pais'].unique()
+        #df_paises = pd.DataFrame(paises_unicos, columns=['code concat country-fk_Country'])
+        #df_paises.to_excel(
+        #    r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Processed-Dataflow\Shared_Information_for_Projects\Country\result-code concat country-fk_Country.xlsx', 
+        #    index=False
+        #)
         
       
         '''FIN DE LA LINEA'''
@@ -159,10 +171,7 @@ def process_columns(df_consolidated,lst_columns):
                                          df_consolidated['GPP Portfolio'])
         
         
-        df_consolidated['fk_date_country_customer_clasification'] = (df_consolidated['fk_year_month'] + '-' +
-                                                            df_consolidated['fk_Country']+ '-' +
-                                                            df_consolidated['fk_Sold_To_Customer_Code']+ '-' +
-                                                            df_consolidated['clasification']).str.upper().str.strip()
+       
         df_consolidated['fk_Date']=pd.to_datetime(df_consolidated['fk_year_month'],
                                                   format='%Y-%b',
                                                   errors='coerce')
@@ -208,7 +217,8 @@ def format_columns(df: pd.DataFrame, lst_columns_str: list, lst_columns_float: l
         
     return df
 
-def group_parquet(df_processed, output_path,name='fill_rate'):
+
+def group_parquet(df_processed, output_path, name=str):
     """ Guarda un dataframe consolidado en archivos Parquet segmentados por año-mes.
     Args:
         df_processed (pd.DataFrame): DataFrame ya limpio y procesado. Debe contener la columna 'fk_year_month'.
@@ -218,60 +228,53 @@ def group_parquet(df_processed, output_path,name='fill_rate'):
     Returns:
         None: La función no devuelve un valor, sino que guarda los archivos en el disco.
     """
-    # --- ESCRITURA DE ARCHIVOS PARQUET SEGMENTADOS ---
-    # Agrupar el DataFrame por 'year_month' y guardar cada grupo en un archivo Parquet.
-    for period, group in df_processed.groupby('fk_year_month'):
-        # Crear un nombre de archivo descriptivo, ej: sales_2023-01.parquet
-        output_filename = f"{name}_{period}.parquet"
-        output_full_path = os.path.join(output_path, output_filename)
-        print(f"Guardando grupo {period} en: {output_full_path}\n")
-        # Guardar el grupo en formato Parquet, excluyendo el índice.
-        group.to_parquet(output_full_path, index=False)
-        #print("\nProceso completado. Archivos Parquet generados exitosamente.")
+    # 1. Asegurar que la carpeta destino existe (evita errores de I/O)
+    os.makedirs(output_path, exist_ok=True)
 
-def main():
+    # 2. Agrupamos
+    # Se crea un mapeo de indices donde
+        # llave: fk_year_month
+        #valor: indice de filas que poseen dicha llave
+        
+    groups = df_processed.groupby('fk_year_month', sort=False)
+
+    for period, group in groups:
+        # Construcción eficiente de la ruta
+        filename = f"{name}_{period}.parquet"
+        full_path = os.path.join(output_path, filename)
+        
+        # 3. Guardar: Usamos el engine 'pyarrow' explícitamente (es el más rápido)
+        # y desactivamos el índice para ahorrar espacio y tiempo de cómputo.
+        group.to_parquet(
+            full_path, 
+            index=False, 
+            engine='pyarrow', 
+            compression='snappy' # Equilibrio perfecto entre peso y velocidad
+        )
+
+def clean_sku(df,name_column:str):
     """
-    Función principal que orquesta el flujo ETL completo para los datos de Fill Rate.
-    Lee las rutas de configuración, ejecuta la lectura, el mapeo de países,
-    el procesamiento de columnas y la segmentación en archivos Parquet.
-
-    Returns: None: La función orquesta el proceso completo y no devuelve un valor.
+    Limpia y estandariza la columna del argumento de entrada eliminando caracteres no deseados.
+    Solo permite: Letras (A-Z), Números (0-9), y los caracteres /, \, ., -
     """
-    # importamos las rutas de archivos
-    from config_paths import FillRatePaths
-    fil_rate_historic_raw_dir = FillRatePaths.INPUT_RAW_HISTORIC_DIR
-    country_code_file = FillRatePaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
-    processed_parquet_dir = FillRatePaths.OUTPUT_PROCESSED_PARQUETS_DIR
-
-    # Leer los archivos de datos históricos y consolidarlos en un DataFrame.
-    df_consolidated = read_files(fil_rate_historic_raw_dir)
-    # Leer el archivo de códigos de país.
-    df_country = pd.read_excel(country_code_file,
-                               sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
-    # Definir las columnas relevantes para el procesamiento.    
-    lst_columns = ['fk_Date','fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code', 'fk_SKU',
-                   'fk_date_country_customer_clasification',
-                   'Fill Rate First Pass Order Qty', 'Fill Rate First Pass Invoice Qty',
-                   'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
-    df_consolidated = asign_country_code(df_consolidated, df_country)
-    df_processed=process_columns(df_consolidated,lst_columns)
-    # Defino formato de las columnas
-    lst_columns_str=['fk_Date', 'fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code',
-       'fk_SKU', 'fk_date_country_customer_clasification']
     
-    lst_columns_float=['Fill Rate First Pass Order Qty', 'Fill Rate First Pass Invoice Qty',
-       'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
-    df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
-    
-    group_parquet(df_processed, processed_parquet_dir, name='fill_rate')
+    # El patrón define una "lista blanca":
+    # ^ dentro de [] significa "todo lo que NO sea lo siguiente"
+    # A-Z0-9: Letras y números
+    # /: Barra inclinada
+    # \\: Barra invertida (se usan dos para escapar el carácter en Python)
+    # \.: Punto (se escapa porque en regex el punto significa "cualquier carácter")
+    # \-: Guion (se pone al final para evitar que defina un rango)
+    allowed_pattern = r'[^A-Z0-9/\\.\-]'
+    df[name_column] = df[name_column].fillna('').astype(str)
+    df[name_column] = (
+        df[name_column]
+        .astype(str)          # Convierte a texto para evitar errores con nulos o números
+        .str.upper()          # Convierte todo a mayúsculas
+        # El replace elimina espacios y caracteres especiales en un solo paso:
+        .str.replace(allowed_pattern, '', regex=True)
+    )
+    return df
 
 
 
-# --- EJECUCION DEL SCRIPT ---
-# Es una buena práctica envolver la ejecución principal en un bloque if __name__ == "__main__":
-if __name__ == "__main__":
-    try:
-        main()
-        print("Processing of historical Fill Rate data completed successfully.")
-    except Exception as e:
-        print(f"Error en procesamiento de datos de Fill Rate: {e}")

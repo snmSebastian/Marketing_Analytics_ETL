@@ -1,9 +1,25 @@
 """
-Módulo principal de actualización y consolidación para el Maestro de Clientes (Master Customers).
-Su objetivo es generar una tabla de dimensión actualizada, integrando los nuevos códigos de cliente
-de las actualizaciones de Fill Rate y Sales, asignando su clasificación de canal y tipo de distribución
-mediante lógica de negocio compleja y tablas de referencia.
-El resultado final es un archivo Excel maestro actualizado (Upsert).
+MAESTRO DE CLIENTES: Orquestador de Dimensiones y Clasificación Regional.
+
+Este módulo actúa como el "estandarizador" de la base de datos de clientes. Su misión 
+es capturar nuevos registros que aparecen en Fill Rate y Sales para asignarles una 
+identidad de negocio (Canal y Tipo de Distribución) antes de integrarlos al maestro.
+
+¿Qué hace especial a este proceso?
+ 1. LIMPIEZA DE CÓDIGOS: Trata los códigos de cliente (slicing y limpieza de '/') 
+    para asegurar que las llaves de cruce sean perfectas.
+ 2. LÓGICA DE CANALES (complete_clasification): No solo une tablas, aplica reglas 
+    específicas por país. Por ejemplo, si un cliente es de Colombia y no tiene canal, 
+    lo asigna a 'SHOWROOMS'; para otros países usa 'TRADITIONALHARDWARESTORES'.
+ 3. ENRIQUECIMIENTO: Cruza la data con tablas de "Clientes Compartidos" y 
+    clasificaciones finales para normalizar nombres y categorías.
+ 4. ACTUALIZACIÓN INTELIGENTE (Upsert): Compara el maestro de Excel con la data nueva 
+    usando la llave 'País-Cliente', reemplaza lo existente y añade lo nuevo.
+
+💡 Nota Senior: Este módulo es el que garantiza que en Power BI los clientes no 
+aparezcan como "Sin Clasificar", dándole orden al reporte regional.
+
+ Primero asigna info proveniente de datalake, si no asigna segun reglas establecidas.
 """
 
 #---------------- LIBRERIAS -----------------------
@@ -17,8 +33,9 @@ import os
 import sys
 import re
 from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
+from Sales.Process_ETL.Update import read_files_parquets
 
-def complete_clasification(df_consolidated, df_customers_shared, df_customers_clasifications, df_country):
+def assing_clasification(df_consolidated, df_all_customers, df_customers_clasifications):
     """
     Aplica la lógica ETL completa para asignar el Canal y Tipo de Distribución (Dist Channel/Type) a los nuevos
     clientes. Incluye limpieza de código de cliente, mapeo de clasificación compartida, limpieza de
@@ -31,26 +48,24 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     Returns:
         pd.DataFrame: DataFrame final con el esquema de la tabla maestra de clientes, incluyendo las columnas 'fk_Dist_Channel' y 'fk_Dist_Type' completadas.
     """
-    # Asignacion de pais
-    df_consolidated = asign_country_code(df_consolidated, df_country)
-   
+    # Asignacion de pais   
     df_consolidated['code_customer'] = (
                                     # . Aplicamos el slicing a la columna original (con .str[2:] para cada elemento)
-                                df_consolidated['Sold-To Customer Code'].str[3:]
+                                df_consolidated['fk_Sold-To Customer Code'].str[3:]
                                 .where(
                                     # La condición: ¿El valor en esa celda contiene '/'?
-                                    df_consolidated['Sold-To Customer Code'].str.contains('/'),
+                                    df_consolidated['fk_Sold-To Customer Code'].str.contains('/'),
                                     # El 'otro' valor: Mantener el valor original de la columna
-                                    other=df_consolidated['Sold-To Customer Code']
+                                    other=df_consolidated['fk_Sold-To Customer Code']
                                     )
                                     # se quitan los ceros iniciales
-                                    .str.lstrip('0')
+                                    #.str.lstrip('0')
                                 )
     
 
     # Crea las fk para relacionar info de clientes compartidos con los nuevos clientes
-    df_customers_shared['fk_country_customer'] = df_customers_shared['Country'].astype(str) + '-' + df_customers_shared['fk_Customer_Code'].astype(str) 
-    df_customers_shared['fk_country_customer'] = df_customers_shared['fk_country_customer'].str.upper().str.strip().str.replace(' ', '')
+    df_all_customers['fk_country_customer'] = df_all_customers['fk_Country'].astype(str) + '-' + df_all_customers['fk_Sold-To Customer Code'].astype(str) 
+    df_all_customers['fk_country_customer'] = df_all_customers['fk_country_customer'].str.upper().str.strip().str.replace(' ', '')
    
    
     df_consolidated['fk_country_customer'] = df_consolidated['fk_Country'] + '-' + df_consolidated['code_customer'].astype(str)    
@@ -61,26 +76,22 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     df_customers_clasifications['fk_channel'] = df_customers_clasifications['fk_channel'].astype(str).str.upper().str.strip().str.replace(' ', '')
    
     df_consolidated=pd.merge(df_consolidated,
-             df_customers_shared[['fk_country_customer', 'Sold-To Dist Channel Shared']],
+             df_all_customers[['fk_country_customer', 'fk_Dist_Channel']],
              how='left',
              on='fk_country_customer')
-    df_consolidated['Sold-To Dist Channel Shared']=df_consolidated['Sold-To Dist Channel Shared'].fillna('NOTFOUND')
-    df_consolidated['Sold-To Dist Channel Shared'] = df_consolidated['Sold-To Dist Channel Shared'].str.upper().str.strip().str.replace(' ', '')
+    
+    df_consolidated['fk_Dist_Channel']=df_consolidated['fk_Dist_Channel'].fillna('NOTFOUND')
+    df_consolidated['fk_Dist_Channel'] = df_consolidated['fk_Dist_Channel'].str.upper().str.strip().str.replace(' ', '')
    
-    condicion_not_found = df_consolidated['Sold-To Dist Channel Shared'].str.contains('NOTFOUND|NOT', regex=True)
-    df_consolidated['Sold-To Dist Channel Shared']=np.where(~condicion_not_found,
-                                                             df_consolidated['Sold-To Dist Channel Shared'],
-                                                             df_consolidated['Sold-To Dist Channel'])
-    df_consolidated['Sold-To Dist Channel Shared'] = df_consolidated['Sold-To Dist Channel Shared'].str.upper().str.strip().str.replace(' ', '')
-
+   
     diccionario_map = {'MESSMERCHANT':'MASSMERCHANT'}
-    df_consolidated['Sold-To Dist Channel Shared']=df_consolidated['Sold-To Dist Channel Shared'].replace(diccionario_map)
+    df_consolidated['fk_Dist_Channel']=df_consolidated['fk_Dist_Channel'].replace(diccionario_map)
    
 
     channel_map=list(set(df_customers_clasifications['fk_channel'].unique())) 
     # condiciones para completar la clasificación de los clientes
     es_colombia = (df_consolidated['fk_Country'] == 'COLOMBIA')
-    canal_no_mapeado = (~df_consolidated['Sold-To Dist Channel Shared'].isin(channel_map))
+    canal_no_mapeado = (~df_consolidated['fk_Dist_Channel'].isin(channel_map))
     
     condiciones = [
      # Condición 1: Colombia Y canal no mapeado
@@ -96,15 +107,15 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     #  Definir los valores a asignar para cada condición
     valores = [
     'SHOWROOMS',# Condición 1: COLOMBIA y NO en subcanal_map
-    df_consolidated['Sold-To Dist Channel Shared'], # Condición 2: COLOMBIA y SÍ en subcanal_map (usa el valor actual)
+    df_consolidated['fk_Dist_Channel'], # Condición 2: COLOMBIA y SÍ en subcanal_map (usa el valor actual)
     'TRADITIONALHARDWARESTORES', # Condición 3: OTRO país y NO en subcanal_map
-    df_consolidated['Sold-To Dist Channel Shared'] # Condición 4: OTRO país y SÍ en subcanal_map (usa el valor actual)
+    df_consolidated['fk_Dist_Channel'] # Condición 4: OTRO país y SÍ en subcanal_map (usa el valor actual)
     ]
 
     df_consolidated['fk_Dist_Channel'] = np.select(
     condiciones, 
     valores, 
-    default=df_consolidated['Sold-To Dist Channel Shared'] # Si ninguna condición aplica (por seguridad)
+    default=df_consolidated['fk_Dist_Channel'] # Si ninguna condición aplica (por seguridad)
     )
 
     df_consolidated=pd.merge(df_consolidated,
@@ -117,14 +128,14 @@ def complete_clasification(df_consolidated, df_customers_shared, df_customers_cl
     # delete duplicates
     df_consolidated = df_consolidated.drop_duplicates(subset=['fk_country_customer'])
    
-    lst_columns=['fk_Country', 'Sold-To Customer Code', 'Sold-To Customer',
+    lst_columns=['fk_Country', 'fk_Sold-To Customer Code', 'Sold-To Customer Name',
     'pk_Sold-To Dist Channel', 'fk_Sold-To Dist Type','fk_country_customer']
     df_consolidated=df_consolidated[lst_columns]
    
     df_consolidated.rename(columns={
     'fk_Country': 'fk_Country',
-    'Sold-To Customer Code': 'fk_Sold-To Customer',
-    'Sold-To Customer': 'Sold-To Customer Name',
+    'fk_Sold-To Customer Code': 'fk_Sold-To Customer Code',
+    'Sold-To Customer Name': 'Sold-To Customer Name',
     'pk_Sold-To Dist Channel': 'fk_Dist_Channel',
     'fk_Sold-To Dist Type': 'fk_Dist_Type'
     }, inplace=True)
@@ -153,9 +164,9 @@ def update_excel_file(df_master, df_consolidated,name='master_customers'):
     
     #Creo la fk en el maste
     if name=='master_customers':
-        df_master['fk_country_customer']=df_master['fk_Country']+'-'+df_master['fk_Sold-To Customer']
+        df_master['fk_country_customer']=df_master['fk_Country']+'-'+df_master['fk_Sold-To Customer Code']
         df_master['fk_country_customer']=df_master['fk_country_customer'].str.upper().str.strip().str.replace(' ',  '')
-        df_consolidated['fk_country_customer']=df_consolidated['fk_Country']+'-'+df_consolidated['fk_Sold-To Customer']
+        df_consolidated['fk_country_customer']=df_consolidated['fk_Country']+'-'+df_consolidated['fk_Sold-To Customer Code']
         df_consolidated['fk_country_customer']=df_consolidated['fk_country_customer'].str.upper().str.strip().str.replace(' ',  '')
     else:
         df_master['fk_country_customer']=df_master['fk_Country']+'-'+df_master['fk_Sold-To Customer Code']
@@ -176,7 +187,6 @@ def update_excel_file(df_master, df_consolidated,name='master_customers'):
     else:
         df_final=df_final.drop(columns=['fk_country_customer'])
     return df_final
-
 
 def notation_name(df_update, df_notation_customers):
     """
@@ -233,14 +243,15 @@ def notation_name(df_update, df_notation_customers):
     return df_update
 
 
-
 def main():
     """	
     Función principal que orquesta el proceso ETL para actualizar el Maestro de Clientes.	
     El proceso incluye:
         1) Consolidación de datos de actualización de Fill Rate y Sales.	
-        2) Asignación de clasificaciones de cliente. 3) Aplicación de la lógica de Upsert al maestro histórico.	
-        4) Corrección de notación de nombres. 5) Guardado final en el archivo Excel maestro.	
+        2) Asignación de clasificaciones de cliente.
+        3) Aplicación de la lógica de Upsert al maestro histórico.	
+        4) Corrección de notación de nombres.
+        5) Guardado final en el archivo Excel maestro.	
     
     Returns: None: La función orquesta el proceso y no devuelve un valor,
                    guardando el resultado en un archivo Excel
@@ -259,34 +270,87 @@ def main():
         md_customers=MasterCustomersPaths.OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE
         
         notation_customers_file=MasterCustomersPaths.INPUT_RAW_NOTATION_NAMES_FILE
-        
+        customers_datalake=MasterCustomersPaths.INPUT_RAW_QUERY_CUSTOMERS_FILE
+
+
         fill_rate_update=MasterCustomersPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
         sales_update=MasterCustomersPaths.INPUT_RAW_UPDATE_SALES_DIR
         
         # --- LECTURA DE ARCHIVOS DE CONFIGURACIÓN ---
         df_customers_shared = pd.read_excel(customers_shared,sheet_name='Customers_Shared_by_Country', dtype=str, engine='openpyxl')
+        print('read customers shared ')
         df_customers_clasifications = pd.read_excel(customers_shared,sheet_name='Clasifications', dtype=str, engine='openpyxl')
+        print('read customers clasificario')
         df_country = pd.read_excel(country_code_file,
                                     sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+        print('read country')
         df_notation_customers=pd.read_excel(notation_customers_file, dtype=str, engine='openpyxl')
-        df_fill_rate=read_files(fill_rate_update)
-        df_sales=read_files(sales_update)
+        print('notation ')
+        df_customers_datalake=pd.read_excel(customers_datalake, dtype=str, engine='openpyxl')
+        print('customers datalake')
         df_master=pd.read_excel(md_customers, dtype=str, engine='openpyxl')
+        print('read md')
+        df_fill_rate=read_files(fill_rate_update)
+        print('read fr')
+        df_sales=read_files_parquets(sales_update)
+        print('read sales')
+        # Unifico la informacion de clientes provenientes de datalake e informacion compartida por los paises
+        df_customers_datalake.rename(columns={'Customer Name':'Sold-To Customer Name'},inplace=True)        
+        df_customers_shared.rename(columns={'Country': 'fk_Country',
+                                            'fk_Customer_Code': 'fk_Sold-To Customer Code',
+                                            'Name_Customer':'Sold-To Customer Name',
+                                            'Sold-To Dist Channel Shared':'fk_Dist_Channel'},inplace=True)
+        
+        df_all_customers=pd.concat([df_customers_shared, df_customers_datalake], ignore_index=True).drop_duplicates(['fk_Sold-To Customer Code','fk_Country'], keep='first')
+        print('df_all_customers')
+        
         # --- LECTURA Y CONSOLIDACIÓN DE DATOS DE ACTUALIZACIÓN --
-        lst_columns=['Country Code', 'Destination Country','Sold-To Customer Code','Sold-To Customer','Sold-To Dist Channel']
+        # consolido los clientes de fill rate y sales
+        lst_columns_fr=['Country Code', 'Destination Country','Sold-To Customer Code','Sold-To Customer']
+        lst_columns_sls=['fk_Country', 'fk_Sold_To_Customer_Code', 'Customer Name']
+
+        df_fill_rate=df_fill_rate[lst_columns_fr]
+        df_sales=df_sales[lst_columns_sls]
+
+        df_fill_rate=asign_country_code(df_fill_rate, df_country)
+        print('assign country')
+        df_fill_rate.rename(columns={'Sold-To Customer Code': 'fk_Sold-To Customer Code',
+                                    'Sold-To Customer':'Sold-To Customer Name'},inplace=True)
+        print('rename col fr')
+        df_sales.rename(columns={'Customer Name': 'Sold-To Customer Name',
+                                 
+                                 'fk_Sold_To_Customer_Code':'fk_Sold-To Customer Code'},inplace=True)
+        print('rename col sales')
         
-        df_fill_rate=df_fill_rate[lst_columns]
-        df_sales=df_sales[lst_columns]
+        lst_colums_md_customers=['fk_Country', 'fk_Sold-To Customer Code', 'Sold-To Customer Name']
+        print('lst_colums_md_customers')
+        df_fill_rate=df_fill_rate[lst_colums_md_customers]
+        print('ok fill rate')
+        print(df_fill_rate.columns)
+        df_sales=df_sales[lst_colums_md_customers]
+        print('ok sales')
+        print(df_sales.columns)
+
+        df_consolidated=pd.concat([df_fill_rate, df_sales], ignore_index=True).drop_duplicates(['fk_Sold-To Customer Code','fk_Country'], keep='first')
+        print('df_consolidated')
+
+
+
+
+        # Asigno clasificacion a todos los clientes, primero busco en datalake, si no asigno por regla establecida
+        df_consolidated=assing_clasification(df_consolidated, df_all_customers, df_customers_clasifications)
+        print('complete_clasification')
         
-        df_consolidated=pd.concat([df_fill_rate, df_sales], ignore_index=True)
-        df_consolidated=complete_clasification(df_consolidated,
-                                            df_customers_shared,
-                                            df_customers_clasifications,
-                                            df_country)
         df_update=update_excel_file(df_master,
                                     df_consolidated,
                                     name='master_customers')
+        
+        print('update_excel_file')
+
+        
         df_update=notation_name(df_update,df_notation_customers)
+        print('notation_name')
+        
         df_update.to_excel(md_customers, index=False)
         print("Proceso de actualización de clientes completado exitosamente.")
         pass 

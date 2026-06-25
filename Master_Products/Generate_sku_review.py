@@ -1,9 +1,32 @@
 """
-Módulo de Orquestación y Ejecución para la generación del Archivo de Revisión de Productos.
-Este script centraliza el flujo ETL (llamando a las funciones de column_processing.py)
-para identificar nuevos SKUs, asignar clasificaciones GPP, atributos (Corded/Cordless, Voltaje),
-y generar un archivo de trabajo (WORKFILE_NEW_PRODUCTS_REVIEW_FILE) que requiere
-la validación manual del analista.
+LA ADUANA DE PRODUCTOS: EL FILTRO PRE-MAESTRO
+-------------------------------------------
+Este script es el corazón de la integridad de datos. Su misión es detectar "intrusos": 
+SKUs que aparecen en las ventas o la demanda pero que nadie conoce en el Maestro. 
+En lugar de dejar que rompan los reportes de Power BI, los atrapa, les crea un perfil 
+técnico sugerido y se los pasa al analista en un Excel para que les dé el visto bueno.
+
+Sin este proceso, las jerarquías de marca y categoría serían un caos total.
+
+FLUJO DE TRABAJO:
+1. Gran Recolección: Consolida archivos Parquet y Excel de Sales, Demand y Fill Rate 
+   para ver qué se está moviendo en la región.
+2. Cacería de SKUs: Compara contra el Maestro actual para identificar qué códigos 
+   son nuevos "extranjeros".
+3. Perfilamiento Genético: Usa el motor de 'column_processing' para heredar datos de 
+   SKU Base, consultar Snowflake y extraer voltaje/baterías de las descripciones.
+4. Auditoría de Consistencia: Detecta si un SKU Base viejo se está queriendo pasar 
+   de listo con categorías o SBUs distintas a las originales.
+5. Entrega del Workfile: Escupe el archivo de revisión que el equipo de Master Data 
+   usa para validar antes de la carga final.
+
+💡 NOTA DE SENIOR:
+Ojo con la función `consolidar_parquets`; si la carpeta tiene muchísimos archivos, 
+el consumo de RAM puede subir rápido. Este script es un orquestador, así que si 
+quieres cambiar *cómo* se calcula el voltaje o la marca, el lugar correcto es 
+meterle mano a `column_processing.py`, no aquí.
+
+Asigna informacion primero tomando de datalake luego por sku base
 """
 
 #---------------- LIBRERIAS -----------------------
@@ -24,12 +47,21 @@ from typing import List, Union
 # Importación de Funciones de Transformación y Reutilización
 # Se importan las funciones de procesamiento de datos compartidas (read_files)
 # y la lógica de clasificación de productos (Master_Products/column_processing).
-from Fill_Rate.Process_ETL.Process_Files import asign_country_code, read_files
+from Fill_Rate.Process_ETL.Process_Files import  read_files,clean_sku
 from Master_Products.column_processing import (obtain_new_products, assign_sku_base, assign_info_by_key,
                               assign_gpp_by_portafolio, verify_psd, verify_gpp,
                               corded_or_cordless_or_gas, assing_qty_batteries, assing_voltaje,
-                              assign_bare, assign_sub_brand, review_sku_base_with_diferent_category,assign_proyects_xr)
+                              assign_bare, assign_sub_brand, review_sku_base_with_diferent_category)
 def consolidar_parquets(carpeta_path):
+    """
+    Escanea una carpeta, busca todos los archivos .parquet y los une en un solo gran DataFrame.
+    
+    Es el paso final para "pegar" todas las piezas del rompecabezas que se procesaron 
+    por separado. Si no encuentra archivos, te avisa por consola en lugar de 
+    lanzar un error que detenga todo el script. 
+    
+    Ojo: Asegúrate de tener suficiente RAM si la carpeta está muy pesada, ya que 
+    carga todo a la vez antes de concatenar."""
     # Definir la ruta de la carpeta
     ruta = Path(carpeta_path)
     
@@ -71,10 +103,7 @@ def main():
         path_fill_rate_update=MasterProductsPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
         path_sales_update=MasterProductsPaths.INPUT_RAW_UPDATE_SALES_DIR
         path_demand_update=MasterProductsPaths.INPUT_RAW_UPDATE_DEMAND_DIR
-        
-        path_producst_hts=MasterProductsPaths.WORKFILE_HTS_FILE
-        path_producst_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
-        
+                
         path_New_Products=MasterProductsPaths.WORKFILE_NEW_PRODUCTS_REVIEW_FILE    
         path_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
         path_psd=MasterProductsPaths.INPUT_RAW_SHARED_PSD_FILE
@@ -93,20 +122,31 @@ def main():
         df_demand=consolidar_parquets(path_demand_update)
 
         df_master_products=pd.read_excel(path_master_products, dtype=str, engine='openpyxl')
-        df_new_products=pd.read_excel(path_New_Products, dtype=str, engine='openpyxl')
+        df_sku_review=pd.read_excel(path_New_Products, dtype=str, engine='openpyxl')
 
         df_gpp=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='GPP')
         df_brand=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='Brand')
         df_psd=pd.read_excel(path_psd, dtype=str, engine='openpyxl')
         df_snowflake=pd.read_parquet(path_sku_snowflake, engine='pyarrow')
 
-            
-        df_proyects=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='Proyects')
-        df_dewaltXR=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='DW_XR')
+
+        #-------------------------
+        # Limpieza SKU
+        #-------------------------
+        df_fill_rate=clean_sku(df_fill_rate,'Country Material')
+        df_sales=clean_sku(df_sales,'fk_SKU')
+        df_demand=clean_sku(df_demand,'Global Material')
+        df_master_products=clean_sku(df_master_products,'SKU')
+        df_sku_review=clean_sku(df_sku_review,'SKU')
+        df_psd=clean_sku(df_psd,'SKU')
+        df_snowflake=clean_sku(df_snowflake,'SKU')
+
+
+      
         #---------------------------------------------------
         #--- Genero el archivo con los nuevos productos
         #----------------------------------------------------
-        df_new_products= obtain_new_products(df_fill_rate, df_sales, df_demand, df_new_products,df_master_products)
+        df_new_products= obtain_new_products(df_fill_rate, df_sales, df_demand, df_sku_review,df_master_products)
         # Filtro robusto: elimina valores nulos reales (NaN/None) y strings vacíos
         df_new_products = df_new_products[df_new_products['SKU'].notna()]
         df_new_products = df_new_products[df_new_products['SKU'].astype(str).str.upper() != 'NONE']
@@ -116,7 +156,7 @@ def main():
         'GPP Division Description', 'GPP Category Code',
         'GPP Category Description', 'GPP Portfolio Code',
         'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-        'Voltaje', 'Bare', 'Sub-Brand','Project Name','Dewalt XR','origen_sku','check_sku']
+        'Voltaje', 'Bare', 'origen_sku','check_sku']
         
         columnas_a_crear=[col for col in lst_colums_gpp if col not in df_new_products.columns]
         for col in columnas_a_crear:
@@ -138,8 +178,7 @@ def main():
         columns_merge = ['SKU Description', 'Brand','GPP SBU',
             'GPP Division Code',
             'GPP Category Code',
-            'GPP Portfolio Code',
-            'Corded / Cordless'
+            'GPP Portfolio Code'
         ]
         df_new_products.loc[:, columns_merge] = np.nan
         df_new_products = assign_info_by_key(
@@ -191,7 +230,7 @@ def main():
         'GPP Division Description', 'GPP Category Code',
         'GPP Category Description', 'GPP Portfolio Code',
         'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-        'Voltaje', 'Bare', 'Sub-Brand','origen_sku','¿como se asigno gpp?','check_sku']
+        'Voltaje', 'Bare', 'origen_sku','¿como se asigno gpp?','check_sku']
 
         df_new_products_asigned=df_new_products_asigned[lst_colums_gpp].copy()
         df_new_products_con_base=df_new_products_con_base[lst_colums_gpp].copy()
@@ -247,29 +286,23 @@ def main():
         
         # Asigno la cantidad de baterías a los nuevos productos
         df_new_products_gpp['Batteries Qty'] = df_new_products_gpp.apply(
-            lambda row: assing_qty_batteries(row['SKU'], row['SKU Description'], row['Batteries Qty']), axis=1)
-        
+            lambda row: assing_qty_batteries(row['SKU']), axis=1)
         # Asigno el voltaje a los nuevos productos
         df_new_products_gpp['Voltaje'] = df_new_products_gpp.apply(
-            lambda row: assing_voltaje(row['SKU Description'], row['Voltaje']), axis=1)
+            lambda row: assing_voltaje(row['SKU Description']), axis=1)
         
         # Asigno el valor de Bare a los nuevos productos
         df_new_products_gpp['Bare'] = df_new_products_gpp.apply(
             lambda row: assign_bare(row['SKU'], row['Batteries Qty'], row['Corded / Cordless']), axis=1)
-        #Asigno la sub-marca a los nuevos productos
-        df_new_products_gpp['Sub-Brand'] = df_new_products_gpp.apply(
-            lambda row: assign_sub_brand(row['SKU'], row['SKU Description'], row['Brand']), axis=1)
         
-        # Asigno Proyects y Dewalt XR
 
-        df_new_products_gpp=assign_proyects_xr(df_new_products_gpp, df_proyects, df_dewaltXR)
 
         lst_colums_gpp_final=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP', 'GPP SBU',
         'GPP SBU Description', 'SBU Type', 'GPP Division Code',
         'GPP Division Description', 'GPP Category Code',
         'GPP Category Description', 'GPP Portfolio Code',
         'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-        'Voltaje', 'Bare', 'Sub-Brand','Project Name','Dewalt XR','origen_sku','¿como se asigno gpp?','check_sku']
+        'Voltaje', 'Bare','origen_sku','¿como se asigno gpp?','check_sku']
     
         df_new_products_gpp = df_new_products_gpp[lst_colums_gpp_final]
         #------------------------------------------------------------------
@@ -278,13 +311,12 @@ def main():
         
         # Extraigo los sku base que tienen diferente sbu-category para su revision
         df_sku_base_review=review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp)
-
         # Creo el dataframe que contiene tanto los nuevos sku como los sku a revisar
         df_review_products=pd.concat([df_new_products_gpp,df_sku_base_review], ignore_index=True)
-
+        
         # Exporto a excel el dataframe de nuevos productos
         df_review_products.to_excel(path_New_Products, index=False)
-        print("Proceso de actualización de productos completado exitosamente.")     
+        print("Proceso de generacion archivo de sku por revisar completado exitosamente.")     
         pass
     except Exception as e:
         print(f"Error en la generacion del archivo con nuevos sku review: {e}")

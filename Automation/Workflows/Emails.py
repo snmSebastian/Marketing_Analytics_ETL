@@ -1,14 +1,17 @@
 """
-Este módulo se encuentra en el núcleo de la capa de Orquestación, proporcionando las utilidades críticas para
-ejecutar otros módulos Python de forma segura y para gestionar el envío automatizado de reportes de estado 
-por correo electrónico vía Microsoft Outlook (API COM).
-FunciónPropósito Principal 
-    * execute_file_py:Ejecuta un módulo ETL externo (subprocess), aísla el proceso
-                    y captura el código de salida y el mensaje de error.
-    * correo: Envía el correo electrónico de forma síncrona 
-              usando win32com.client, incluyendo lógica robusta de liberación de objetos COM.
-    * send_etl_report: Determina el estado global del ETL (Éxito/Fallo), formatea el subject y el cuerpo HTML con el resumen de errores, 
-                     y llama a correo.
+CAPA DE ORQUESTACIÓN Y NOTIFICACIONES
+-------------------------------------
+Este módulo es el motor central que se encarga de dos tareas críticas:
+1. Ejecutar de forma segura los scripts de Python (ETLs) usando subprocesos aislados.
+2. Gestionar la mensajería automática vía Outlook para reportar si todo salió bien o si algo explotó.
+
+Funciones clave:
+    * execute_file_py: Lanza un módulo de Python, captura su resultado y detecta si terminó en error 
+                      sin detener el flujo principal.
+    * correo: Motor de envío que habla con la API de Outlook (COM). Incluye limpieza profunda de 
+              memoria para que Outlook no se quede "colgado".
+    * send_etl_report: El "juez" del proceso. Analiza los resultados de todos los módulos, decide si 
+                       el estado global es Éxito o Fallo, y arma el reporte HTML dinámico.
 """
 #====================
 #--- LIBRERIAS
@@ -31,6 +34,10 @@ def execute_file_py(modulo: str, directorio: Path,PYTHON_EXECUTABLE) -> tuple[in
     Retorna: (código_salida, mensaje_error_o_output)
     """
     try:
+        # 1. Copiamos todo el contexto actual (incluye el VENV activo)
+        entorno_hijo = os.environ.copy()
+        # 2. Agregamos solo el encoding sin borrar el resto
+        entorno_hijo["PYTHONIOENCODING"] = "utf-8"
         # Usamos subprocess.run() que es más simple y bloquea hasta terminar.
         # Capturamos stdout y stderr para el reporte.
         command = [PYTHON_EXECUTABLE, "-m", modulo]
@@ -41,7 +48,8 @@ def execute_file_py(modulo: str, directorio: Path,PYTHON_EXECUTABLE) -> tuple[in
             capture_output=True, # Captura stdout y stderr
             text=True,           # Decodifica el output a texto
             check=False,
-            env={"PYTHONIOENCODING": "utf-8"}          # No lanza excepción por código de salida != 0
+            env=entorno_hijo
+            #env={"PYTHONIOENCODING": "utf-8"}          # No lanza excepción por código de salida != 0
         )
         
         codigo_salida = resultado.returncode

@@ -1,14 +1,29 @@
 """
-Control Maestro de Flujo de Trabajo (Workflow Orchestrator) del proyecto ETL.
+ORQUESTADOR MAESTRO: Cerebro Flexible del Pipeline ETL Regional.
 
-Este script es el punto de entrada principal para la ejecución secuencial de todos
-los procesos ETL (Demand, Fill Rate, Sales, Master Data). Gestiona la ejecución
-mediante subprocess y, al finalizar, genera y envía un reporte de estado
-detallado (éxito o fallo) por correo electrónico utilizando la función send_etl_report.
+Este script es el centro de mando diseñado para ejecutar procesos de datos de forma modular. 
+Su arquitectura permite "encender o apagar" módulos según la necesidad del usuario, 
+simplemente comentando o descomentando las líneas en el diccionario de configuración.
 
-Nota: Contiene manejo de excepciones específico para suprimir errores COM de Outlook
-después de un envío exitoso.
+Módulos que este script puede gestionar:
+    • modulo_customers = 'Master_Customers.Update'
+    • modulo_demand = 'Demand.Process_ETL.Update'
+    • modulo_fill_rate = 'Fill_Rate.Process_ETL.Update'
+    • modulo_sales = 'Sales.Process_ETL.Update'
+    • modulo_products = 'Master_Products.Update_md_products' 
+    • modulo_sku_review = 'Master_Products.Generate_sku_review'
+    • modulo_hts = 'Master_Products.Update_File_HTS'
+    • modulo_pwt = 'Master_Products.Update_File_PWT'
 
+¿Qué hace exactamente este script?
+ 1. PREPARACIÓN: Mapea las rutas y activa el Python del VENV para evitar conflictos.
+ 2. EJECUCIÓN: Itera sobre los módulos seleccionados, capturando logs y códigos de salida.
+ 3. NOTIFICACIÓN: Genera un reporte dinámico en Outlook:
+    - ÉXITO: Confirma que la data está lista para los Dataflows de Power BI Service.
+    - FALLO: Detiene el flujo y lanza una ALERTA CRÍTICA para proteger la integridad de los datos.
+
+Nota técnica: Incluye un parche para ignorar errores irrelevantes de la API COM de Outlook 
+que ocurren tras un envío exitoso.
 """
 
 #==================
@@ -33,14 +48,14 @@ def main():
     Returns: None: La función ejecuta procesos externos y envía una notificación por email
     """
     print(f'{"="*80}')
-    print("--- 🔄 INICIANDO PROCESO:UPDATES ETL ---")
+    print("---  INICIANDO PROCESO:PIPELINE SKU REVIEW ---")
     print(f'{"="*80}')
     
     #==================================================================
     # --- Definición Específica del Entorno Virtual ---
 
     # La ruta que proporcionaste:
-    RUTA_ENTORNO = Path(r"C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts\venv_Scripts_RMA")
+    RUTA_ENTORNO = Path(r"C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Scripts\venv_Scripts_RMA")
 
     # En Windows, el ejecutable está dentro de la carpeta 'Scripts'
     # y el nombre del archivo es 'python.exe'
@@ -63,8 +78,8 @@ def main():
     #  CONFIGURACIÓN DE RUTAS Y MÓDULOS
     # =========================================================================
     BASE_PATH = Path(
-        #r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
-        r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
+
+        r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace'
     )
     # Directorio donde se encuentran todos tus módulos (la carpeta 'Scripts')
     DIRECTORIO_RAIZ_MODULOS = BASE_PATH / 'Scripts'
@@ -101,7 +116,7 @@ def main():
     # Diccionario para almacenar los resultados: {nombre_amigable: (codigo_salida, output)}
 
     resultados_ejecucion = {}
-    print("\n--- 🚀 INICIANDO EJECUCIÓN SECUENCIAL ---")
+    print("\n--- INICIANDO EJECUCIÓN PIPELINE SKU REVIEW ---")
 
     for nombre_amigable, modulo in MODULOS_ETL.items():
         #print(f"\n| Ejecutando: {nombre_amigable} ({modulo})...")
@@ -215,12 +230,12 @@ if __name__ == "__main__":
         # Solo reportamos si NO es el error específico de Outlook COM
         outlook_error_code = -2147352567 
         if hasattr(e, 'args') and e.args and e.args[0] == outlook_error_code:
-            print("\n| ✅ Correo enviado con éxito (Error de limpieza COM suprimido).")
+            print("\n|  Correo enviado con éxito .")
             # Salida exitosa (código 0) aunque hubo una excepción COM "fantasma"
             sys.exit(0) 
         else:
             # Si es otro error inesperado, lo mostramos
-            print(f"\n| 🚨 ERROR CRÍTICO INESPERADO en Pipeline: {e}")
+            print(f"\n|ERROR CRÍTICO INESPERADO en Pipeline: {e}")
             sys.exit(1)
     time.sleep(10) # Puedes dejarlo para mayor seguridad en el cierre del proceso.
 

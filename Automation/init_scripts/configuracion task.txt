@@ -1,5 +1,10 @@
+Program/script
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 
--ExecutionPolicy Bypass -File "C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts\Automation\init_scripts\ "NAME PIPELINE".ps1"
+Add argument
+-NoExit -ExecutionPolicy Bypass -File "C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts\Automation\init_scripts\pipeline_sku_review.ps1"
 
-C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts
+start in
+1)C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts
+
+2)C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts

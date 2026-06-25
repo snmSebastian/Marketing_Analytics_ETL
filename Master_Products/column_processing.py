@@ -1,9 +1,30 @@
 """
-Módulo de funciones de transformación (T) para la construcción y enriquecimiento del Maestro de Productos (Master Products).
-Contiene la lógica central para identificar nuevos SKUs de las fuentes de datos (Fill Rate, Sales, Demand),
-clasificar estos SKUs (asignación de SKU Base, GPP, Corded/Cordless, Bare, etc.) y generar una tabla
-de revisión para el analista.
+EL CEREBRO DE PRODUCTOS: Motor de Clasificación, ADN y Enriquecimiento
+----------------------------------------------------------------------
+Este script actúa como el "Traductor Universal" de la operación regional. Su misión es crítica: 
+toma los SKUs que vienen "desnudos" (sin contexto) de las transacciones y les asigna una identidad 
+completa. Básicamente, es el filtro que evita que el reporte de Power BI se llene de códigos 
+huérfanos, garantizando que cada producto tenga marca, familia y categoría clara.
+
+¿POR QUÉ ES VITAL ESTE PROCESO?
+ 1. CACERÍA DE SKUS: Detecta en tiempo real qué códigos nuevos han aparecido en Fill Rate, Sales 
+    o Demand que aún no existen en nuestro Maestro de Productos.
+ 2. ÁRBOL GENEALÓGICO: Ejecuta el algoritmo de "SKU Base" para agrupar variantes (kits, combos) 
+    bajo un mismo padre, manteniendo la coherencia del catálogo.
+ 3. INYECCIÓN DE GPP: Cruza la data con Snowflake para inyectar la jerarquía oficial de 
+    negocio (SBU, División, Categoría y Portafolio).
+ 4. MINERÍA DE ATRIBUTOS: Realiza un "escaneo inteligente" de descripciones para extraer datos 
+    técnicos críticos: Voltaje, Corded/Cordless, cantidad de Baterías y si es equipo "Bare".
+ 5. FILTRO DE CALIDAD: Genera la tabla de revisión para que el analista valide solo lo nuevo, 
+    minimizando el error humano.
+
+💡 CONSEJO DE SENIOR:
+Este módulo es una LIBRERÍA CORE. Cualquier cambio en las reglas de clasificación (como el 
+diccionario de 'Cordless' o las funciones de 'Regex') impactará retroactivamente a miles 
+de productos en todo el ecosistema. Si vas a meterle mano a la lógica, haz un backup de 
+la última corrida; aquí un pequeño ajuste reclasifica toda la historia de un plumazo.
 """
+
 
 #---------------- LIBRERIAS -----------------------
 #--------------------------------------------------
@@ -72,7 +93,7 @@ def obtain_new_products(df_fill_rate, df_sales, df_demand, df_new_products, df_m
                    'GPP Division Description', 'GPP Category Code',
                    'GPP Category Description', 'GPP Portfolio Code',
                    'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-                   'Voltaje', 'Bare', 'Sub-Brand', 'Project Name', 'Dewalt XR', 'origen_sku', 'check_sku']
+                   'Voltaje', 'Bare',  'origen_sku', 'check_sku']
     
     for col in [c for c in target_cols if c not in df_new.columns]:
         df_new[col] = np.nan
@@ -311,42 +332,45 @@ def corded_or_cordless_or_gas(sku,description,category_description,portfolio_des
     # Si no se encuentra ninguna coincidencia, retorna el valor original
     return corded_or_cordless
 
-def assing_qty_batteries(sku, description, batteries_qty):
+def assing_qty_batteries(sku):
     """
     Asigna la cantidad de baterías. Utiliza un mapeo de sufijos específicos del SKU (ej., X1, L2) para inferir la
     cantidad de baterías, o asigna 0 si el SKU termina en B (Bare Tool).
 
     Args:
         sku (str): El SKU a clasificar.
-        description (str): La descripción del SKU.
         batteries_qty (list): Lista de cantidades de baterías.
 
     """
-    sku = str(sku).strip().upper().replace(' ', '')
-    if '/' in sku:
-        sku= sku.split('/')[0]  # Toma la parte antes de la barra diagonal
+    # 1. Limpieza inicial: Convertir a string, quitar espacios y pasar a Mayúsculas
+    sku_clean = str(sku).strip().upper().replace(' ', '')
     
-    description = description.strip().upper().replace(' ', '')
-    description = str(description).strip().upper().replace(' ', '')
+    # 2. Manejo de la barra diagonal: Si existe, toma lo de la izquierda
+    if '/' in sku_clean:
+        sku_clean = sku_clean.split('/')[0]
     
-    # Lista de palabras clave para identificar la cantidad de baterías
-    lst_battery_keywords = ['S1','S2','C1','C2','E1','E2',
-                            'D1','D2','F1','F2','L1','L2',
-                            'G1','G2','M1','M2','Q1','Q2',
-                            'P1','P2','R1','R2','J1','J2',
-                            'R1','R2','T1','T2','W1','W2',
-                            'X1','X2','U1','U2','Y1','Y2','Z1','Z2'
+    # 3. PRIORIDAD: Si termina en 'B', es Bare Tool (0 baterías)
+    # Ponemos esto primero para que no lo confunda con sufijos de batería
+    if sku_clean.endswith('B'):
+        return "0"
+    
+    # 4. Lista de sufijos (Keywords)
+    lst_battery_keywords = [
+        'S1','S2','C1','C2','E1','E2','D1','D2','F1','F2','L1','L2',
+        'G1','G2','M1','M2','Q1','Q2','P1','P2','R1','R2','J1','J2',
+        'T1','T2','W1','W2','X1','X2','U1','U2','Y1','Y2','Z1','Z2'
     ]
     
-    # Verifica si la descripción contiene alguna palabra clave relacionada con baterías
-    if any(elemento in sku[-2:] for elemento in lst_battery_keywords):
-        return str(batteries_qty[-1])
-    if sku.endswith('B'):
-        # Si el SKU termina con 'B', significa que no tiene batería
-        return "0"
-    return batteries_qty  # Retorna el valor original si no se encuentra información relevante
-
-def assing_voltaje(description, voltaje):
+    # 5. Verificación de sufijo de batería (últimos 2 caracteres)
+    suffix = sku_clean[-2:]
+    if suffix in lst_battery_keywords:
+        # Retorna el último número del sufijo (el '1' o '2')
+        return suffix[-1] 
+    
+    # 6. Retorno por defecto: Si no es Bare Tool ni tiene sufijo conocido
+    # Si batteries_qty es una lista, podrías querer el primer elemento o un default
+    return "0"
+def assing_voltaje(description):
     """
     Asigna el valor del Voltaje al SKU extrayéndolo de las palabras clave de la descripción (ej., '20V', '54V').
     
@@ -364,10 +388,6 @@ def assing_voltaje(description, voltaje):
     for vol in lst_voltajes:
         if vol in description and not('220V' in description):
             return vol
-            
-    # Si no se encuentra voltaje en la descripción, se devuelve el valor original
-    if voltaje is not None and str(voltaje).strip() not in ['', '-']:
-        return voltaje
         
     return "-" # Devolver None o '-' si no se encuentra nada
     # Si no se encuentra información relevante, retorna el valor original
@@ -454,319 +474,58 @@ def review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp):
     df_resultado=df_resultado[lst_colums_gpp]  
     return df_resultado 
 
-def assign_proyects_xr(df_master, df_proyects, df_dewaltXR):
+
+
+
+def assign_proyects(df_master, df_proyects, df_dewaltXR, df_dw_ind):
     """
-    Clasifica productos como 'Dewalt XR' y asigna proyectos por SKU o SKU Base.
+    Realiza una clasificación jerárquica de productos y asignación de proyectos.
+    * Dewalt XR
+    * Project Name
+    * Industrial Type
+    * B+D Power Connect 20V
 
-    Prioriza la asignación de proyecto por SKU; si es nulo, intenta por SKU Base. 
-    Limpia columnas temporales de forma segura.
 
-    Args:
-        df_master, df_proyects, df_dewaltXR (pd.DataFrame): DataFrames de entrada.
+    La función consolida información de múltiples fuentes (Dewalt XR, Proyectos e Industrial) 
+    utilizando una lógica de prioridad: primero intenta asignar por 'SKU' y, si no hay coincidencia, 
+    por 'SKU Base'. Finalmente, aplica reglas de negocio específicas para la marca Black+Decker.
 
-    Returns:
-        pd.DataFrame: DataFrame con 'Dewalt XR' y 'Project Name' consolidados.
+    Optimizada mediante mapeo de índices (Series mapping) para maximizar el rendimiento 
+    y reducir el consumo de memoria en comparación con cruces (merges) tradicionales.
     """
-    # 1. Clasificación XR
-    xr_sku = set(df_dewaltXR['SKU'])
-    xr_sku_base = set(df_dewaltXR['SKU Base'].dropna())
+    # 1. Preparar Diccionarios de Mapeo (Mucho más rápidos que merge)
+    # Creamos mapeos para SKU y SKU Base de cada categoría
     
-    condicion_xr = df_master['SKU'].isin(xr_sku) | df_master['SKU Base'].isin(xr_sku_base)
-    df_master['Dewalt XR'] = np.where(condicion_xr, 'XR', '-')
-
-    # 2. Cruce por SKU
-    df_master = pd.merge(df_master, df_proyects[['SKU', 'Project Name']].drop_duplicates('SKU'), 
-                         on='SKU', how='left')
+    # Proyectos
+    proj_map_sku = df_proyects.dropna(subset=['SKU']).drop_duplicates('SKU').set_index('SKU')['Project Name']
+    proj_map_base = df_proyects.dropna(subset=['SKU Base']).drop_duplicates('SKU Base').set_index('SKU Base')['Project Name']
+    # Dewalt XR (incluye el del df_proyects según tu lógica original)
+    xr_map_sku = df_dewaltXR.dropna(subset=['SKU']).drop_duplicates('SKU').set_index('SKU')['Dewalt XR']
+    xr_map_base = df_dewaltXR.dropna(subset=['SKU Base']).drop_duplicates('SKU Base').set_index('SKU Base')['Dewalt XR']
+    # Industrial Type
+    ind_map_sku = df_dw_ind.dropna(subset=['SKU']).drop_duplicates('SKU').set_index('SKU')['Industrial Type']
+    ind_map_base = df_dw_ind.dropna(subset=['SKU Base']).drop_duplicates('SKU Base').set_index('SKU Base')['Industrial Type']
+    # 2. Aplicar asignación con .map() y .fillna()
+    # Este método evita crear columnas duplicadas (_base) y tener que borrarlas luego
     
-    # 3. Cruce por SKU Base
-    df_master = pd.merge(df_master, df_proyects[['SKU Base', 'Project Name']].drop_duplicates('SKU Base'), 
-                         on='SKU Base', how='left', suffixes=('', '_base'))
-
-    # 4. Consolidación y Limpieza Segura
-    if 'Project Name_base' in df_master.columns:
-        df_master['Project Name'] = df_master['Project Name'].fillna(df_master['Project Name_base'])
-        df_master.drop(columns=['Project Name_base'], inplace=True)
+    # Asignar Project Name
+    df_master['Project Name'] = df_master['SKU'].map(proj_map_sku)
+    df_master['Project Name'] = df_master['Project Name'].fillna(df_master['SKU Base'].map(proj_map_base))
+    # Asignar Dewalt XR
+    df_master['Dewalt XR'] = df_master['SKU'].map(xr_map_sku)
+    df_master['Dewalt XR'] = df_master['Dewalt XR'].fillna(df_master['SKU Base'].map(xr_map_base))
+    # Asignar Industrial Type
+    df_master['Dewalt Industrial'] = df_master['SKU'].map(ind_map_sku)
+    df_master['Dewalt Industrial'] = df_master['Dewalt Industrial'].fillna(df_master['SKU Base'].map(ind_map_base))
+    # 3. Lógica B+D (Vectorizada)
+    # Limpiamos strings una sola vez para ganar eficiencia
+    clean_brand = df_master['Brand'].str.lower().str.strip()
+    clean_proj = df_master['Project Name'].str.lower().str.strip()
     
+    mask_bdk = (clean_brand == 'black+decker') & (clean_proj == 'power connect 20v')
+    df_master.loc[mask_bdk, 'B+D Power Connect 20V'] = 'B+D Power Connect 20V'
     return df_master
 
-  
-
-
-def main():
-    """	
-    Función principal que orquesta el pipeline de identificación y clasificación de nuevos productos.	
-    El flujo incluye:
-        1) Consolidación de nuevos SKUs.
-        2) Asignación de SKU Base (si aplica).	
-        3) Look-up de GPP (por SKU Base o por Portafolio).
-        4) Asignación de atributos (Corded/Cordless, Voltaje, Bare).	
-        5) Generación de un archivo de revisión Excel (WORKFILE_NEW_PRODUCTS_REVIEW_FILE) que incluye nuevos SKUs y SKUs Base con clasificaciones inconsistentes.	
-    Returns: None: La función orquesta el proceso y no devuelve un valor,
-                   guardando el resultado en un archivo Excel        
-    """
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: MD PRODUCTS UPDATE ETL ---")
-    print("=" * 55)
-    #-------------------------------
-    #---- RUTAS DE LOS ARCHIVOS
-    #-------------------------------
-    from config_paths import MasterProductsPaths
-    #path_fill_rate_update=MasterProductsPaths.INPUT_RAW_UPDATE_FILL_RATE_DIR
-    #path_sales_update=MasterProductsPaths.INPUT_RAW_UPDATE_SALES_DIR
-    #path_demand_update=MasterProductsPaths.INPUT_RAW_UPDATE_DEMAND_DIR
-    path_ConsultaSku=MasterProductsPaths.INPUT_RAW_ConsultaSKU_FILE
-
-    path_producst_hts=MasterProductsPaths.WORKFILE_HTS_FILE
-    path_producst_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
-    
-    path_New_Products=MasterProductsPaths.WORKFILE_NEW_PRODUCTS_REVIEW_FILE    
-    path_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
-    path_psd=MasterProductsPaths.INPUT_RAW_SHARED_PSD_FILE
-    path_sku_snowflake=MasterProductsPaths.INPUT_RAW_SkuName_FILE
-    path_proyects=MasterProductsPaths.INPUT_PROCESSED_PROYECTS_FILE
-   
-    #path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
-    path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE
-    
-    #-----------------------------
-    #----  Cargo dataframes
-    #-----------------------------
-    #df_fill_rate=read_files(path_fill_rate_update)
-    #df_sales=read_files(path_sales_update)
-    #df_demand=read_files(path_demand_update)
-    df_consultaSku=pd.read_excel(path_ConsultaSku, dtype=str, engine='openpyxl')
-    
-
-    df_master_products=pd.read_excel(path_master_products, dtype=str, engine='openpyxl')
-    df_new_products=pd.read_excel(path_New_Products, dtype=str, engine='openpyxl')
-
-    df_gpp=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='GPP')
-    df_brand=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='Brand')
-    df_psd=pd.read_excel(path_psd, dtype=str, engine='openpyxl')
-    df_snowflake=pd.read_parquet(path_sku_snowflake, engine='pyarrow')
-    df_proyects=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='Proyects')
-    df_dewaltXR=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='DW_XR')
-    
-    #---------------------------------------------------
-    #--- Genero el archivo con los nuevos productos
-    #----------------------------------------------------
-    df_new_products= df_consultaSku.copy()
-    
-    lst_colums_gpp=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP', 'GPP SBU',
-       'GPP SBU Description', 'SBU Type', 'GPP Division Code',
-       'GPP Division Description', 'GPP Category Code',
-       'GPP Category Description', 'GPP Portfolio Code',
-       'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-       'Voltaje', 'Bare', 'Sub-Brand','Project Name','Dewalt XR','origen_sku','check_sku']
-    
-    columnas_a_crear=[col for col in lst_colums_gpp if col not in df_new_products.columns]
-    for col in columnas_a_crear:
-        df_new_products[col] = pd.Series(np.nan, index=df_new_products.index, dtype='object')
-    df_new_products = df_new_products[lst_colums_gpp]
-    df_new_products['origen_sku'] = 'new sku'
-
-
-    #----------------------------------------------------
-    #---- Procesamiento de los nuevos productos
-    #----------------------------------------------------
-
-    # Asigno el sku base a los nuevos productos    
-    sku_base_set = set(df_master_products['SKU Base'].dropna().unique())
-    df_new_products['SKU Base'] = df_new_products['SKU'].apply(lambda x: assign_sku_base(x, sku_base_set))
-    
-    # Genero dos dataframes, uno con sku base y otro sin sku base
-    df_new_products_con_base = df_new_products[df_new_products['SKU Base'] != '-'].copy()
-    df_new_products_sin_base = df_new_products[df_new_products['SKU Base'] == '-'].copy() 
-
-    #...................................................................
-    #----- Procesamiento para los nuevos productos con sku base
-    #...................................................................
-
-    #Asigno el gpp para los nuevos productos con sku base
-    key_column = ['SKU Base']
-    columns_merge = [
-        'Brand', 'GPP', 'GPP SBU', 'GPP SBU Description', 'SBU Type', 
-        'GPP Division Code', 'GPP Division Description', 'GPP Category Code',
-        'GPP Category Description', 'GPP Portfolio Code', 
-        'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-        'Voltaje', 'Bare'
-    ]
-    df_new_products_con_base.loc[:, columns_merge] = np.nan
-    df_new_products_con_base = assign_info_by_key(
-        df_new_products_con_base, 
-        df_master_products, 
-        key_column, 
-        columns_merge
-    )
-
-    #...................................................................
-    #----- Procesamiento para los nuevos productos SIN sku base
-    #...................................................................
-
-    # Asigno el gpp por medio del portafolio para los nuevos productos sin sku base
-    df_gpp['fk_GPP_Portfolio'] = df_gpp['GPP Portfolio Description'].str.strip().str.upper().str.replace(' ', '') 
-    df_new_products_sin_base['GPP'] = df_new_products_sin_base['GPP Portfolio Description'].apply(
-        lambda x: assign_gpp_by_portafolio(x, df_gpp['fk_GPP_Portfolio'].unique(), df_gpp))
-    
-    # Asigno "-" a los gpp que no existen
-    lst_gpp=(
-    pd.Series(df_gpp['GPP'].dropna().unique())  # 1. Convertir el arreglo de NumPy de vuelta a Serie
-    .str.strip()
-    .str.upper()
-    .str.replace(' ', '')
-    .tolist()
-    )
-    df_new_products_sin_base['GPP'] = df_new_products_sin_base['GPP'].apply(
-        lambda x: verify_gpp(x, lst_gpp))
-    
-    #============================================================================================================
-    # Asigno la info de descripcion y gpp existente en snowflake, para aquellos sku que aun no poseen gpp
-
-    #Asigno el gpp para los nuevos productos con sku base
-    rename_columns={
-        'BRAND':'Brand',
-        'SBU Code':'GPP SBU',
-        'SBU Description':'GPP SBU Description',
-        'Division Code':'GPP Division Code',
-        'Division Description':'GPP Division Description',
-        'Category Code':'GPP Category Code',
-        'Category  Description':'GPP Category Description',
-        'Portafolio Code':'GPP Portfolio Code',
-        'Portafolio Description':'GPP Portfolio Description'
-    }
-    df_snowflake=df_snowflake.rename(columns=rename_columns)
-    key_column = ['SKU']
-    columns_merge_snowflake = [
-         'SKU Description','Brand', 'GPP SBU', 'GPP SBU Description',  
-        'GPP Division Code', 'GPP Division Description', 'GPP Category Code',
-        'GPP Category Description', 'GPP Portfolio Code', 
-        'GPP Portfolio Description'
-    ]
-    df_new_products_sin_info=df_new_products_sin_base[df_new_products_sin_base['GPP'] == '-'].copy()
-    
-    df_new_products_sin_info.loc[:, columns_merge_snowflake] = np.nan
-    df_new_products_sin_info = assign_info_by_key(
-        df_new_products_sin_info, 
-        df_snowflake, 
-        key_column, 
-        columns_merge_snowflake
-    )
-    df_new_products_sin_info['GPP'] =(df_new_products_sin_info['GPP SBU']+'-'+
-                                        df_new_products_sin_info['GPP Division Code']+'-'+
-                                        df_new_products_sin_info['GPP Category Code']+'-'+
-                                        df_new_products_sin_info['GPP Portfolio Code']
-                                    )  
-
-    df_new_products_sin_info['GPP'] = df_new_products_sin_info['GPP'].apply(
-        lambda x: verify_gpp(x, lst_gpp))
-    
 
 
 
-    #-------------- Verifico si los sku que aun no tienen gpp, estan en la base compartida por PSD    
-    df_posibble_psd = df_new_products_sin_info[df_new_products_sin_info['GPP'] == '-'].copy()
-    # elimino los sku que no tienen gpp para no genrar duplicados al concatenar
-    df_new_products_sin_info = df_new_products_sin_info[df_new_products_sin_info['GPP'] != '-']
-    
-    # Asigno la notacion existe en la tabla principal de clasificaciones, segun el gpp que existe en snowflake
-    columns_merge_sku_sin_info = [ 'GPP SBU', 'GPP SBU Description', 'SBU Type', 
-        'GPP Division Code', 'GPP Division Description', 'GPP Category Code',
-        'GPP Category Description', 'GPP Portfolio Code', 
-        'GPP Portfolio Description']
-    df_new_products_sin_info.loc[:,columns_merge_sku_sin_info]= np.nan  # Inicializo las columnas a NaN
-    key_column = ['GPP']
-    df_new_products_sin_base = assign_info_by_key(
-        df_new_products_sin_base, 
-        df_gpp, 
-        key_column, 
-        columns_merge_sku_sin_info
-    )
-
-
-    lst_psd = (
-    pd.Series(df_psd['SKU'].dropna().unique())  # 1. Convertir el arreglo de NumPy de vuelta a Serie
-    .str.strip()
-    .str.upper()
-    .str.replace(' ', '')
-    .tolist()
-    )
-    
-    df_posibble_psd['GPP']=df_posibble_psd['SKU'].apply(
-        lambda x: verify_psd(x, lst_psd))
-    # Asigno toda la informacion de clasificacion tomadno en cuenta el gpp de PSD
-    key_column = ['GPP']
-    columns_merge = [
-        'GPP SBU', 'GPP SBU Description', 'SBU Type', 
-        'GPP Division Code', 'GPP Division Description', 'GPP Category Code',
-        'GPP Category Description', 'GPP Portfolio Code', 
-        'GPP Portfolio Description']
-    df_posibble_psd.loc[:,columns_merge] = np.nan
-    df_posibble_psd = assign_info_by_key(
-        df_posibble_psd, 
-        df_gpp, 
-        key_column, 
-        columns_merge
-    )
-
-    # Asigno ¿como se asigno gpp? a los dataframes
-    df_new_products_con_base['¿como se asigno gpp?'] = 'sku base'
-    df_new_products_sin_base['¿como se asigno gpp?'] = 'por portafolio dado por SAP'
-    df_new_products_sin_info['¿como se asigno gpp?se']='snowflake'
-    df_posibble_psd['¿como se asigno gpp?'] = 'sku esta en la base compartida por PSD'
-    # Ordeno las columnas de los dataframes
-    lst_colums_gpp=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP', 'GPP SBU',
-    'GPP SBU Description', 'SBU Type', 'GPP Division Code',
-    'GPP Division Description', 'GPP Category Code',
-    'GPP Category Description', 'GPP Portfolio Code',
-    'GPP Portfolio Description', 'Corded / Cordless', 'Batteries Qty',
-    'Voltaje', 'Bare', 'Sub-Brand','origen_sku','¿como se asigno gpp?','check_sku']
-    df_new_products_con_base = df_new_products_con_base[lst_colums_gpp]
-    df_new_products_sin_base = df_new_products_sin_base[lst_colums_gpp]
-    df_posibble_psd = df_posibble_psd[lst_colums_gpp]
-    # Genero el nuevo dataframe con los nuevos productos a partir de los dataframes con y sin sku base
-    df_new_products_gpp=pd.concat([df_new_products_con_base, df_new_products_sin_base,df_new_products_sin_info,df_posibble_psd], ignore_index=True)    
-    
-    # Tratamiento de los espacios en blanco y NaN
-    df_new_products_gpp = df_new_products_gpp.fillna(value='-')
-    df_new_products_gpp = df_new_products_gpp.astype("string")
-
-    # ---------------------------------------------------------------------------------------
-    # Tratamiento de columnas corded / cordless, qyt batteries, voltaje,bare,sun brand
-    # ---------------------------------------------------------------------------------------
-    #Asigno el corded o cordless a los nuevos productos
-    df_new_products_gpp['Corded / Cordless'] = df_new_products_gpp.apply(
-        lambda row: corded_or_cordless_or_gas(row['SKU'], row['SKU Description'], row['GPP Category Description'], row['GPP Portfolio Description'],
-                                        row['Corded / Cordless']), axis=1)
-    
-    # Asigno la cantidad de baterías a los nuevos productos
-    df_new_products_gpp['Batteries Qty'] = df_new_products_gpp.apply(
-        lambda row: assing_qty_batteries(row['SKU'], row['SKU Description'], row['Batteries Qty']), axis=1)
-    
-    # Asigno el voltaje a los nuevos productos
-    df_new_products_gpp['Voltaje'] = df_new_products_gpp.apply(
-        lambda row: assing_voltaje(row['SKU Description'], row['Voltaje']), axis=1)
-    
-    # Asigno el valor de Bare a los nuevos productos
-    df_new_products_gpp['Bare'] = df_new_products_gpp.apply(
-        lambda row: assign_bare(row['SKU'], row['Batteries Qty'], row['Corded / Cordless']), axis=1)
-    #Asigno la sub-marca a los nuevos productos
-    df_new_products_gpp['Sub-Brand'] = df_new_products_gpp.apply(
-        lambda row: assign_sub_brand(row['SKU'], row['SKU Description'], row['Brand']), axis=1)
-    # Asigno Proyects y Dewalt XR
-    df_new_products_gpp=assign_proyects_xr(df_new_products_gpp, df_proyects, df_dewaltXR)
-    
-
-    # Extraigo los sku base que tienen diferente sbu-category para su revision
-    df_sku_base_review=review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp)
-    
-    # Creo el dataframe que contiene tanto los nuevos sku como los sku a revisar
-    df_review_products=pd.concat([df_new_products_gpp,df_sku_base_review], ignore_index=True)
-    
-
-    # Exporto a excel el dataframe de nuevos productos
-    path_result_ConsultSku=r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Data\Raw\Products\other\ResultConsultSku.xlsx'
-    df_review_products.to_excel(path_result_ConsultSku, index=False)
-
-if __name__ == "__main__":
-    main()
-    print("Proceso de actualización de productos completado exitosamente.")

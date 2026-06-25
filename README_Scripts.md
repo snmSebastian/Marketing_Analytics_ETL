@@ -1,9 +1,8 @@
-# 🚀 Guía de Instalación y Configuración del Proyecto ETL
+# 🚀 Documentación Técnica: Proyecto ETL Marketing Analytics
 
-> ⭐ **Propósito Principal:** Este repositorio alberga la lógica de negocio y la orquestación de todos los **procesos de Extracción, Transformación y Carga (ETL)** del proyecto de Marketing Analytics.
->
-> 🎯 **Foco de Master_Products:** El módulo clave de **Dimensión Producto (SKU)**, cuyo objetivo es identificar **nuevos SKUs**, aplicar la **lógica de negocio compleja** (asignación de GPP, Corded/Cordless, Bare, etc.) y consolidar el *Maestro de Productos* limpio y validado.
+> ⭐ **Propósito:** Repositorio central que orquesta los flujos de datos para **Ventas, Fill Rate, Demanda y Datos Maestros**. Implementa una arquitectura modular para la extracción, transformación y carga (ETL) de datos hacia modelos analíticos.
 
+**Stack Tecnológico:** Python 3.8+ | Pandas | PowerShell | Parquet
 ---
 
 ## 1. Arquitectura y Estructura del Directorio 📂
@@ -13,61 +12,45 @@ La arquitectura está modularizada, siguiendo el patrón de datos (*Sales*, *Dem
 ### 1.1 Estructura del Directorio `scripts/`
 scripts/
 ├── __init__.py         # Inicialización del módulo Python
-
 ├── config_paths.py     # ⚙️ Módulo central de gestión de rutas
-
 ├── requirements.txt    # Dependencias del proyecto
-
 ├── .gitignore          # Archivos a ignorar (logs, temporales, etc.)
-
-├── Fill_Rate/
-
-    └──Process_File.py
-    └──Update.py
-    └──Readme_Fill_Rate.md
-
-├── Sales/
-
-    └──Process_File.py
-    └──Update.py
-    └──Readme_Update.md
-
-├── Demand/
-
-    └──Process_File.py
-    └──Update.py
-    └──Readme_Demand.md
-
-├── Master_Customers/   # 👔 Lógica de la Dimensión Cliente
-
-    └──Update.py
-    └──Readme_Customers.md
-
-├── Master_Products/    # 📦 Lógica de la Dimensión Producto (SKU)
-
-    ├── column_processing.py
-    └── Generate_sku_review.py
-    └── Update_File_HTS.py
-    └── Update_File_HTS.py
-    └── Update_md_product_File.py
-
-├── Automation/ # 📧 Scripts de automatización y monitoreo de procesos (Ej: envío de notificaciones por email al finalizar los ETL).
-
+│
+├── Automation/         # 🤖 Orquestación y Pipelines
+│   ├── init_scripts/
+│   │   └── pipeline_QueryDemand.ps1  # Script de lanzamiento PowerShell
     └── Workflows
-        └──W_update_md_products.py
-    
-    └── init_scrits ( contiene archivos .bat para ser ejecutados mediante programador de tareas)
-        └──update_md_products.bat
-    
-├── Shared_Information_for_Projects / # 🌍 Contiene datos maestros, tablas de referencia o utilidades transversales (Dimensiones Comunes) que son consumidas por otros módulos.
-
+│       └── pipeline_QueryDemand.py
+│
+├── Fill_Rate/          # 📉 Módulo de Nivel de Servicio
+│   └── Process_ETL/
+│       ├── Process_Files.py
+│       └── Update.py         # Lógica incremental (Partition Replace)
+│
+├── Sales/              # 💰 Módulo de Ventas
+│   └── Process_ETL/
+│       ├── Process_Files.py
+│       └── Update.py         # Lógica Upsert + NPI
+│
+├── Demand/             # 📊 Módulo de Demanda
+│   └── Process_ETL/
+│       └── ...
+│
+├── Master_Customers/   # 👔 Dimensión Cliente
+│   ├── Update.py             # Lógica de Upsert y Clasificación
+│   └── README_MD_Customers.md
+│
+├── Master_Products/    # 📦 Dimensión Producto (SKU)
+│   ├── Generate_sku_review.py
+│   ├── Update_File_HTS.py
+│   ├── Update_File_PWT.py
+│   ├── Update_md_products.py # Consolidación Final
+│   └── README_MD_Products.md
+│
+└── Shared_Information_for_Projects/ # 🌍 Utilidades Transversales
     └── Calendar.py
 
 
-
-├── (New folder...) # ❗ Nota Importante: Las nuevas carpetas deben ser creadas teniendo en cuenta el área funcional o la entidad de datos específica, por ejemplo: el área de demanda tiene su propia carpeta (e.g., 'Demand/').
-
-    └──...
 ---
 
 
@@ -75,9 +58,10 @@ scripts/
 
 | Módulo/Carpeta | Propósito Principal | Rol ETL y Ciencia de Datos |
 | :--- | :--- | :--- |
-| **`Data_Sources/`** | Manejo de datos transaccionales brutos. | **E y L Inicial:** Limpieza, tipado y estandarización para generar archivos **Parquet** listos para modelos. |
-| **`Master_Products/`** | Construcción de la **Dimensión SKU**. | **T Avanzada:** Lógica de negocio crítica (Asignación de GPP, derivación de atributos como *Corded/Cordless*), y flujo **Upsert** (`Update_md_products_file.py`). |
-| **`Master_Customers/`** | Construcción de la Dimensión Cliente. | **T de Normalización:** Normalización de nombres (`Notation_Name_Customers`) y asignación de jerarquías. |
+| **`Sales/` & `Fill_Rate/`** | Procesamiento transaccional. | **ETL Incremental:** Utilizan `Update.py` para leer fuentes crudas, calcular métricas (ej. NSV, Launch Year) y actualizar históricos en formato **Parquet**. |
+| **`Master_Products/`** | Construcción de la **Dimensión SKU**. | **T Avanzada:** Lógica de negocio crítica (Asignación de GPP, derivación de atributos), y flujo **Upsert** (`Update_md_products.py`). |
+| **`Master_Customers/`** | Construcción de la Dimensión Cliente. | **T de Normalización:** Limpieza de nombres, asignación de canales (`Dist Channel`) y tipos de distribución. |
+| **`Automation/`** | Orquestación. | Scripts `.ps1` para ejecución en entornos Windows/Servidores, manejo de entornos virtuales y logging. |
 
 ---
 
@@ -155,8 +139,8 @@ pip install -r requirements.txt
 ## 4. Verificación y Ejecución ✅
 1. Verificación de Rutas: Asegúrate de que la variable BASE_PATH en scripts/config_paths.py apunte correctamente a tu ubicación de red.
 
-2. Ejecución de Prueba: Puedes probar el proceso de actualización de la Dimensión Producto (SKU):
+2. **Ejecución Manual (Python):** Puedes probar el proceso de actualización de la Dimensión Producto (SKU):
 ```
-python scripts/Master_Products/Update_md_products_file.py
+python scripts/Master_Products/Update_md_products.py
 ```
 (Asegúrate de que los archivos de entrada requeridos existan en la ruta de red configurada antes de ejecutar.)

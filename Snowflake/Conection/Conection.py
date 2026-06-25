@@ -1,8 +1,30 @@
 """
-Módulo de conexión y extracción de datos desde Snowflake.
-Proporciona las herramientas necesarias para la autenticación mediante SSO,
-ejecución de consultas SQL y retorno de resultados en formato DataFrame,
-asegurando una integración fluida con el ecosistema de datos.
+LA LLAVE MAESTRA DE LA NUBE: CONECTOR CORE SNOWFLAKE
+---------------------------------------------------
+Este script es el cordón umbilical entre nuestros procesos locales y el Data Warehouse 
+global (Caspian/Snowflake). Su misión es abrir la puerta de forma segura para que 
+podamos traer la data de ventas, demanda y maestros sin tener que andar descargando 
+reportes manuales que pesan toneladas.
+
+Es el "Traductor Oficial" que convierte consultas SQL en DataFrames de Pandas listos 
+para procesar.
+
+FLUJO DE TRABAJO:
+1. Apertura del Portal: Lanza la autenticación vía SSO (Single Sign-On), abriendo 
+   tu navegador para validar que eres tú.
+2. Negociación de Acceso: Configura el Warehouse, Rol y Esquema específicos para 
+   que Snowflake sepa qué recursos usar y no nos bloquee.
+3. Extracción de Oro: Ejecuta el query y hace el fetch de los datos directamente 
+   a memoria, saltándose el paso de generar archivos intermedios.
+
+💡 NOTA DE SENIOR:
+¡Mucho cuidado! Este módulo es una LIBRERÍA CORE. Prácticamente todos los scripts 
+de extracción (`QuerySales`, `QueryDemand`, `QueryNameSku`) dependen de este archivo. 
+Si cambias algo en `conn_params` (como el warehouse o el rol), podrías romper el 
+acceso de todo el equipo de LAG. 
+Ojo: Como usa `externalbrowser`, siempre va a pedirte interacción humana. No sirve 
+para procesos 100% automáticos en servidores "ciegos" sin antes cambiar el método a 
+Service Account.
 """
 
 #--------------------------------------------------
@@ -46,6 +68,50 @@ def conectar_snowflake_sso(Database:str, Schema:str):
         print(f"Error al conectar: {e}")
         return None
 
+
+def conectar_snowflake_password(Database:str, Schema:str):
+    """
+    Establece una conexión con Snowflake utilizando usuario y contraseña directa.
+
+    Args:
+        Database (str): Nombre de la base de datos.
+        Schema (str): Nombre del esquema.
+        Password (str): Tu contraseña de Snowflake.
+
+    Returns:
+        snowflake.connector.connection: Objeto de conexión.
+    """
+
+    # --- CONFIGURACIÓN DE PARÁMETROS DE CONEXIÓN --
+    conn_params = {
+    "account": "PAA12529-SBD_CASPIAN",
+    "user": "SVC-LAGBI@sbdinc.com", 
+    "authenticator": "externalbrowser",
+    "role": "SVC_LAGBI_ROLE",
+    "warehouse": "DEV_AIDA_WH",
+    "database": Database,
+    "schema": Schema
+    }
+
+
+
+    try:
+        # Establecer la conexión
+        print("Conectando a Snowflake...")
+        ctx = snowflake.connector.connect(**conn_params)
+        if ctx is None:
+            print("🛑 Proceso detenido: Error en la conexión a Snowflake.")
+            return
+        print("Conexión exitosa(via password).")
+        return ctx
+    except snowflake.connector.errors.ProgrammingError as e:
+        print(f"❌ Error de credenciales o permisos: {e}")
+        return None
+    except Exception as e:
+        print(f"Error al conectar: {e}")
+        return None
+    
+
 def query(conexion,sql:str):
     """
     Ejecuta una consulta SQL en la conexión proporcionada y retorna los resultados.
@@ -57,7 +123,7 @@ def query(conexion,sql:str):
     Returns:
         pd.DataFrame: Resultados de la consulta en un DataFrame de Pandas.
     """
-    try:
+    try: 
         # --- EJECUCIÓN DE CONSULTA ---
         cs = conexion.cursor()
         result=cs.execute(sql).fetch_pandas_all()
@@ -66,47 +132,3 @@ def query(conexion,sql:str):
         print(f"Error al ejecutar la consulta: {e}")
         return None
 
-
-#--------------------------------------------------
-# Prueba de ejecucion con query demand
-#--------------------------------------------------
-
-def main():
-    """
-    Orquesta el flujo de extracción de demanda desde Snowflake.
-    El proceso incluye:
-    1) Establecimiento de conexión SSO. 
-    2) Definición y ejecución de la consulta de Forecast. 
-    """
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: SNOWFLAKE DATA EXTRACTION ---")
-    print("=" * 55)
- 
-    conexion=conectar_snowflake_sso(Database="PROD_MARTS",Schema="DEMAND")
-    sql="""
-        SELECT
-                    FISCAL_PERIOD,
-                    FYR_ID,
-                    PROD_KEY,
-                    DMD_GRP_KEY,
-                    LOC_KEY,
-                    gpp_basic_sbu_name,
-                    gpp_basic_div_name,
-                    dmd_gpp_ctgy_cd,
-                    dmd_gpp_basic_portfolio,
-                    FCST_QTY,
-                    FORECAST_VALUE_GSV,
-                    CURRENT_STANDARD_COST
-                    
-                FROM PROD_MARTS.DEMAND.VW_BRZ_DEMAND_HISTORY_FORECAST_TOOLS
-                WHERE FISCAL_PERIOD >= MONTH(DATEADD(month, -1, CURRENT_DATE())) 
-                AND FYR_ID >= YEAR(CURRENT_DATE())
-        """
-
-    df_queryDemand=query(conexion,sql)
-    df_queryDemand.to
-    #print(df_queryDemand.head())
-
-
-if __name__ == "__main__":
-    main()

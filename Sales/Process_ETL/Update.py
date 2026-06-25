@@ -1,8 +1,28 @@
 """
-Módulo de orquestación para el proceso de Actualización Incremental (Upsert) de los datos de Ventas.
-Reutiliza los componentes de procesamiento (E y T) y las funciones de gestión de Parquet (L)
-del módulo Fill_Rate para asegurar una metodología de actualización de datos estandarizada
-y unificada en todo el proyecto ETL.
+EL ACTUALIZADOR DE VENTAS: MOTOR DE CARGA INCREMENTAL
+---------------------------------------------------
+Este script es el que hace el "trabajo sucio" del día a día. Su misión es tomar los 
+archivos de ventas más recientes y meterlos al ecosistema sin tener que reprocesar 
+años de historia. Es el que mantiene Power BI actualizado para que el equipo comercial 
+tenga sus números frescos cada mañana.
+
+FLUJO DE TRABAJO:
+1. Ingesta de Novedades: Escanea la carpeta de updates y consolida los Parquets 
+   que acaban de llegar de los sistemas fuente.
+2. Refinería de Datos: Aplica el combo de funciones de Sales (NSV, NPI, Precios, 
+   Baterías) para que la data nueva hable el mismo idioma que el histórico.
+3. Control de Calidad: Compara las sumas de ventas al inicio y al final. Si el 
+   monto total cambia, lanza una alerta en consola para que no se nos pierda ni un centavo.
+4. Empaquetado Parquet: Guarda los resultados particionados por año-mes, usando 
+   la misma lógica que Fill Rate para que el Data Lake sea consistente.
+
+💡 NOTA DE SENIOR:
+¡Mucho ojo con la carpeta de entrada! Este proceso asume que lo que pongas ahí es 
+"lo nuevo". Si metes archivos que ya estaban en el histórico, podrías causar 
+duplicados dependiendo de cómo esté configurado el orquestador final. 
+Además, fíjate siempre en el log de "Porcentaje de diferencia": si no es 0.00%, 
+algo se rompió en los joins de maestros (G2N, NPI o Master Products) y los 
+números de NSV van a salir mal.
 """
 
 # Librerias
@@ -13,8 +33,7 @@ import sys
 from pathlib import Path
 
 # La importación debe ser relativa al paquete actual.
-from Fill_Rate.Process_ETL.Process_Files import  group_parquet,format_columns
-from Fill_Rate.Process_ETL.Update import read_parquets_to_update,update_parquets,delete_parquet_files
+from Fill_Rate.Process_ETL.Process_Files import  group_parquet,format_columns,clean_sku
 from Sales.Process_ETL.Process_Files import (process_columns_sales,assign_nsv,assign_selling_unit_price,assign_NPI_New_Carryover,
                                              LaunchYear_VR,assign_num_batteries, assign_NSV_NPI_w_Combo)
 
@@ -83,9 +102,8 @@ def main():
         country_code_file = SalesPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
         processed_gross_to_net=SalesPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
         npi=SalesPaths.INPUT_PROCESSED_NPI_FILE
-        filter_npi=SalesPaths.INPUT_PROCESSED_FILTER_NPI_FILE
         md_product_processed_file=SalesPaths.INPUT_PROCESSED_MASTER_PRODUCTS_FILE
-
+        
         #sales_historic_processed_dir =SalesPaths.OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA
         sales_historic_processed_dir =SalesPaths.OUTPUT_PROCESSED_PARQUETS_DIR
         #===============================
@@ -97,10 +115,22 @@ def main():
         
         df_md_product=pd.read_excel(md_product_processed_file,dtype=str, engine='openpyxl')
         df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
+        # Asegurar que npi se lea correctamente según los nombres de las pestañas
         df_npi=pd.read_excel(npi,dtype=str,sheet_name='Database', engine='openpyxl')
-        df_filter_npi=pd.read_excel(filter_npi,dtype=str, engine='openpyxl')
+        df_filter_npi=pd.read_excel(npi,sheet_name='NPI Concat', dtype=str, engine='openpyxl')
        
+        #----------------------
+        #----- LIMPIEZA SKU
+        #----------------------
+        df_update=clean_sku(df_update,'fk_SKU')
+        df_md_product=clean_sku(df_md_product,'SKU')
+        df_npi=clean_sku(df_npi,'SKU')
+        df_filter_npi=clean_sku(df_filter_npi,'SKU')
+        
+        # Elimina duplicados
+        df_md_product.drop_duplicates(subset=['SKU'], keep='first', inplace=True)
 
+        len_init = len(df_update)
         suma_init=df_update["Total Sales"].astype(float).sum()
 
         #=========================================================
@@ -108,10 +138,11 @@ def main():
         #=========================================================
         # Definir las columnas relevantes para el procesamiento. 
 
-        lst_columns = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','fk_Country',
+        lst_columns = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','fk_Country','Country Detail',
                        'Sales Type', 'Sales Type Detail','Sales Type Invoince Country',
                        'fk_Sold_To_Customer_Code','fk_SKU',
-                       'Total Sales', 'Total Cost', 'Units Sold','Units Return','NSV','FX Rate NSV','fk_date_country_customer_clasification'
+                       'Total Sales', 'Total Cost', 'Units Sold','Units Return','NSV','FX Rate NSV','fx_nsv_financial','Outbound',
+                       'fk_date_country_customer_clasification'
                       ]
 
         if df_update is None or df_update.empty:
@@ -125,46 +156,29 @@ def main():
         #=========================================================
         df_update=assign_selling_unit_price(df_update)
         print( "assing selling price")
+        print(f'{df_update['Total Sales'].astype(float).sum()}')
+        print(f'{len(df_update)}')
         df_update=assign_NPI_New_Carryover(df_update,df_npi,df_country)
+        print(f'{len(df_update)}')
+        print(f'{df_update['Total Sales'].astype(float).sum()}')
         print( "assing npi")
         df_update=LaunchYear_VR(df_update,df_npi,df_country)
         print( "assing launch year")
+        print(f'{df_update['Total Sales'].astype(float).sum()}')
+        print(f'{len(df_update)}')
         df_update=assign_num_batteries(df_update,df_md_product)
         print( "assing num batteries")
+        print(f'{df_update['Total Sales'].astype(float).sum()}')
+        print(f'{len(df_update)}')
         df_update=assign_NSV_NPI_w_Combo(df_update,df_filter_npi)
-        print( "assing nsv")
-
-
-
-
-
-        #=========================================================
-        # --- LECTURA Y ACTUALIZACIÓN DE DATOS HISTÓRICOS ---
-        #=========================================================
-        suma_previa=df_update["Total Sales"].astype(float).sum()
-        print(f'la suma previo actualizacion es: {suma_previa}')
-
-        lst_year_month_files_update = df_update['fk_year_month'].unique().tolist()
-        delete_parquet_files(sales_historic_processed_dir, lst_year_month_files_update)
-        print(lst_year_month_files_update)
-
-        
-        suma_posterior=df_update["Total Sales"].astype(float).sum()
-        print(f'la suma posterior actualizacion es: {suma_posterior}')
-        
-        
-        
-        
-
-
-
-
-
+        print( "assing npi w combo")
+        print(f'{df_update['Total Sales'].astype(float).sum()}')
+        print(f'{len(df_update)}')
         
         #====================================
         # --- Formato de columnas ---
         #====================================
-        lst_columns_srt = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','fk_Country',
+        lst_columns_srt = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','fk_Country','Country Detail',
                           'Sales Type', 'Sales Type Detail','Sales Type Invoince Country',
                           'fk_Sold_To_Customer_Code', 'fk_SKU',
                           'fk_date_country_customer_clasification',
@@ -174,25 +188,28 @@ def main():
                             'Selling Unit Price',
                             'NPI Incremental Sales $',
                             'Num Batteries Sales',
-                            'Net Sales NPI w/Combo']
+                            'Net Sales NPI w/Combo',
+                            'fx_nsv_financial',
+                            'Outbound']
         
         df_final=format_columns(df_update,lst_columns_srt,lst_columns_float)
         
         suma_end=df_final["Total Sales"].astype(float).sum()
-        if len(df_update) == len(df_final) and suma_init==suma_end:
+        if len_init == len(df_final) and round(suma_init, 0) == round(suma_end, 0):
             print(f'{"*"*55}')
             print("La longitud del DataFrame procesado coincide con la del DataFrame original.")
-            print("El DataFrame procesado tiene la misma longitud que el DataFrame original.")
             print(f'El dataframe original y final tienen la misma suma de ventas: {suma_init}')
             print(f'{"*"*55}')
         
         else:
             print(f'{"*"*55}')
-            print("La longitud del DataFrame procesado no coincide con la del DataFrame original.")
-            print(f'longitud dataset crudo {len(df_final)}')
+            print("⚠️ ADVERTENCIA: Los totales o registros no coinciden.")
+            print(f'longitud dataset inicial: {len_init}')
             print(f'longitud dataset procesado: {len(df_final)}')
-            print(f'diferencia: {len(df_final)-len(df_final)}')
-            print(f'Porcentaje de diferencia: {(len(df_final)-len(df_final))/len(df_final)*100:.2f}%')
+            print(f'diferencia en registros: {len(df_final) - len_init}')
+            
+            diff_len = len(df_final) - len_init
+            print(f'Porcentaje de diferencia (filas): {(diff_len / len_init) * 100:.2f}%' if len_init != 0 else "0%")
 
             print(f'la suma inicial es: {suma_init}')
             print(f'la suma final es: {suma_end}')
