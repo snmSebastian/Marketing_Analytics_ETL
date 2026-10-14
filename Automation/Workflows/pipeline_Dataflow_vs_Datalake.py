@@ -35,6 +35,25 @@ import time
 from pathlib import Path
 import sys
 from .Emails import execute_file_py,send_etl_report
+import pandas as pd
+def alerta(path_vsDatalake):
+    try:
+        df = pd.read_excel(path_vsDatalake)
+        
+        if 'Dif GSV' in df.columns:
+            # 1. Aseguramos que la columna sea tratada como números
+            valores_num = pd.to_numeric(df['Dif GSV'], errors='coerce')
+            
+            # 2. Verificamos si AL MENOS UN registro en valor absoluto es mayor a 1
+            if (valores_num.abs() > 1).any():
+                return 1
+                
+        return 0
+    except Exception as e:
+        print(f"⚠️ No se pudo calcular la alerta debido al error: {e}")
+        return 0
+
+
 
 def main():
     """
@@ -46,17 +65,18 @@ def main():
     Returns: None: La función ejecuta procesos externos y envía una notificación por email
     """
     print(f'{"="*80}')
-    print("--- 🔄 INICIANDO PROCESO:UPDATES ETL ---")
+    print("--- 🔄 INICIANDO PROCESO:DATAFLOW VS DATALAKE ---")
     print(f'{"="*80}')
 
     #==================================================================
     # --- Definición Específica del Entorno Virtual ---
-
     # La ruta que proporcionaste:
     RUTA_ENTORNO = Path(r"C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Scripts\venv_Scripts_RMA")
+    path_vsDatalake=    r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Data\Raw\Sales\Historic\DataflowvsDatalake.xlsx'
     # En Windows, el ejecutable está dentro de la carpeta 'Scripts'
     # y el nombre del archivo es 'python.exe'
     PYTHON_EXEC_PATH = str(RUTA_ENTORNO / "Scripts" / "python.exe")
+   
 
     # Opcional: Una verificación rápida para asegurarte de que la ruta es correcta
     if not Path(PYTHON_EXEC_PATH).exists():
@@ -71,35 +91,16 @@ def main():
     #  CONFIGURACIÓN DE RUTAS Y MÓDULOS
     # =========================================================================
     BASE_PATH = Path(
-       # r'C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics'
         r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace'
     )
     # Directorio donde se encuentran todos tus módulos (la carpeta 'Scripts')
     DIRECTORIO_RAIZ_MODULOS = BASE_PATH / 'Scripts'
-    # Nombre del MÓDULO ETL que queremos ejecutar (NO la ruta del archivo)
-    # Corresponde a Master_Products/Update_md_products.py
-    
-    #modulo_products = 'Master_Products.Update_md_products' 
-    #modulo_sku_review='Master_Products.Generate_sku_review'
-    #modulo_hts='Master_Products.Update_File_HTS'
-    #modulo_pwt='Master_Products.Update_File_PWT'
-    #modulo_customers='Master_Customers.Update'
-    #modulo_demand='Demand.Process_ETL.Update'
-    #modulo_fill_rate='Fill_Rate.Process_ETL.Update'
-    #modulo_sales='Sales.Process_ETL.Update'
+   
     modulo_vs='Sales.Process_ETL.Dataflow_vs_Datalake'
 
     # Diccionario de módulos a ejecutar: {nombre_amigable: nombre_del_modulo}
     MODULOS_ETL = {
-        #"Demand Update": modulo_demand,
-        #"Fill Rate Update": modulo_fill_rate,
-        #"Sales Update": modulo_sales,
-        #"Master Customers Update": modulo_customers,
-
-        #"Master Products Update": modulo_products,
-        #"HTS Update": modulo_hts,
-        #"PWT Update": modulo_pwt,
-        #"SKU Review Generation": modulo_sku_review
+     
         "Dataflow vs Datalake":modulo_vs
     }
     
@@ -110,7 +111,7 @@ def main():
     # Diccionario para almacenar los resultados: {nombre_amigable: (codigo_salida, output)}
 
     resultados_ejecucion = {}
-    print("\n--- 🚀 INICIANDO EJECUCIÓN PIPELINE Datafloe vs Datalake ---")
+    print("\n---  INICIANDO EJECUCIÓN PIPELINE Dataflow vs Datalake ---")
 
     for nombre_amigable, modulo in MODULOS_ETL.items():
         #print(f"\n| Ejecutando: {nombre_amigable} ({modulo})...")
@@ -120,30 +121,52 @@ def main():
         # Almacenando el resultado completo
         resultados_ejecucion[nombre_amigable] = (code, output) 
 
+   
     # =================================================== 
     # --- DEFINICION SUBJECT Y BOD
     # ===================================================
-    SUBJECTS_ETL = [
-        "Archivo Dataflow vs Datalake Actualizado",  # Éxito (lst_subject[0])
-        "🚨 ERROR CRÍTICO: Fallo en ETL - Archivo Dataflow vs Datalake NO GENERADO" # Fallo (lst_subject[1])
-    ]
-    # Definición de Body (Plantillas HTML COMPLETAS)
-        # lst_body[0]: Body de Éxito
-        # Puedes usar {total_modulos}
-    BODY_TEMPLATE_EXITO = f"""
+    BODY_TEMPLATE_FALLO = f"""
+    <html>
+    <body>
+        <h2 style="color: red;">¡ALERTA! Fallo  en la Actualización Dataflow vs Datalake</h2>
+        <p>Estimado equipo,</p>
+        <p>El proceso de actualización del archivo Dataflow vs Datalake fallo
+        <p>Por esta razón, el archivo <b>Dataflow vs Datalake.xlsx</b> <b>NO se ha actualizado</b> o podría contener información incompleta/errónea.</p>
+        
+   
+        <p style="margin-top: 20px;">Ya me encuentro trabajando en la solución  para restaurar el flujo correcto. Les notificaré de inmediato en cuanto la nueva versión esté limpia, actualizada y lista para trabajar.</p>
+    
+        <p>Lamento los inconvenientes y agradezco tu comprensión.</p>
+        <p>Saludos.</p>
+
+        
+        <p>Saludos.</p>
+
+        <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
+        <b>Sebastian Nuñez.</b><br>
+        Data Science & Data Base Analyst.<br>
+        Stanley Black & Decker, Inc.
+        </p>
+        
+    </body>
+    </html>
+    """
+    
+    
+    BODY_TEMPLATE_EXITO_NO_ALERTA = f"""
     <html>
     <body>
         <h2 style="color: green;">✅ Archivo Dataflow vs Datalake Actualizado</h2>
-        <p>Hola Adrian buenos días,</p>
-        <p> Te comento que el archivo <b>Dataflow vs Datalake</b> ha sido actualizado.</p>
+        <p>Hola equipo buenos días,</p>
+        <p> Les comento que el archivo <b>Dataflow vs Datalake</b> ha sido actualizado. Y no se han presentado cambios </p>
         
         <hr style="border: 1px solid #ccc;">
 
 
-        <p style="margin-top: 20px;"><b>Accede al archivo a través del siguiente enlace:</b></p>
+        <p style="margin-top: 20px;"><b>Pueden acceder al archivo a través del siguiente enlace:</b></p>
         <p style="font-size: 1.2em;">
             <a href="https://ecentral.sharepoint.com/:x:/r/sites/LAGAnalyticsDataRepository/Shared%20Documents/Analytics_Workspace/Data/Raw/Sales/Historic/DataflowvsDatalake.xlsx?d=w17acd68b392c4325b2422526cb7f9e0e&csf=1&web=1&e=iW2Eg5" target="_blank">
-                🔗 Abrir Dataflow vs Datalake.xlsx
+                🔗 Dataflow vs Datalake.xlsx
             </a>
         </p>
 
@@ -160,43 +183,70 @@ def main():
 
     #### **B. Body de Fallo (`lst_body[1]`): Error en la Generación**
 
-    BODY_TEMPLATE_FALLO = f"""
-    <html>
+    BODY_TEMPLATE_EXITO_ALERTA = f"""
+     <html>
     <body>
-        <h2 style="color: red;">🚨 ¡ALERTA! Fallos en la Orquestación Dataflow vs Datalake</h2>
-        <p>Estimado equipo,</p>
-        <p>El proceso de actualización ETL falló. Se detectaron errores
-        <p>Por esta razón, el archivo <b>Dataflow vs Datalake.xlsx</b> <b>NO se ha actualizado</b> o podría contener información incompleta/errónea.</p>
+        <h2 style="color: green;"> Archivo Dataflow vs Datalake Actualizado</h2>
+        <p>Hola equipo buenos días,</p>
+        <p> Les comento que el archivo <b>Dataflow vs Datalake</b> ha sido actualizado. Y se han presentado cambios </p>
         
-        <p>Se requiere revisión inmediata de la orquestación. Por favor, <b>abstenerse de usar el archivo Dataflow vs Datalake</b> hasta nuevo aviso.</p>
-        
-        <p><b>Detalle de Módulos con Error:</b></p>
-        {{detalle_errores}}
-        
+        <hr style="border: 1px solid #ccc;">
+
+
+        <p style="margin-top: 20px;"><b>Pueden acceder al archivo a través del siguiente enlace:</b></p>
+        <p style="font-size: 1.2em;">
+            <a href="https://ecentral.sharepoint.com/:x:/r/sites/LAGAnalyticsDataRepository/Shared%20Documents/Analytics_Workspace/Data/Raw/Sales/Historic/DataflowvsDatalake.xlsx?d=w17acd68b392c4325b2422526cb7f9e0e&csf=1&web=1&e=iW2Eg5" target="_blank">
+                🔗 Dataflow vs Datalake.xlsx
+            </a>
+        </p>
+
         <p>Saludos.</p>
 
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
         <b>Sebastian Nuñez.</b><br>
-        Data Science & Data Base Analyst.<br>
+        Data Scientist & Data Base Analyst.<br>
         Stanley Black & Decker, Inc.
         </p>
-        
     </body>
     </html>
     """
-    BODY_TEMPLATES = [BODY_TEMPLATE_EXITO, BODY_TEMPLATE_FALLO]
+    BODY_TEMPLATES_ALERTA = [BODY_TEMPLATE_EXITO_ALERTA,BODY_TEMPLATE_FALLO]
+    BODY_TEMPLATES_NO_ALERTA = [BODY_TEMPLATE_EXITO_NO_ALERTA,BODY_TEMPLATE_FALLO]
+      
+    SUBJECTS_ETL_ALERTA = [
+         "ALERTA DE CAMBIOS: Archivo Dataflow vs Datalake Actualizado ",  # Éxito (lst_subject[0])
+
+        "ALERTA:Fallo el proceso Dataflow vs Datalake"  # Éxito (lst_subject[0])
+    ]
+
+    SUBJECTS_ETL_NO_ALERTA = [
+         "Archivo Dataflow vs Datalake Actualizado",  # Éxito (lst_subject[0])
+        "ALERTA:Fallo el proceso Dataflow vs Datalake"  # Éxito (lst_subject[0])
+    ]
     # =============================
     # --- ENVIO DE CORREO
     # =============================
-    
+    var_alerta=alerta(path_vsDatalake)
+    print(f'alerta_ {var_alerta}')
     # Llamada a la función
-    lst_email = ['sebastian.nunez@sbdinc.com','Adrian.Orozco@sbdinc.com']
-    send_etl_report(
-        resultados_ejecucion, 
-        lst_email, 
-        SUBJECTS_ETL, 
-        BODY_TEMPLATES
-    )
+    if var_alerta==0:
+        lst_email = ['sebastian.nunez@sbdinc.com','Adrian.Orozco@sbdinc.com','Horacio.Osorio@sbdinc.com']
+
+        send_etl_report(
+            resultados_ejecucion, 
+            lst_email, 
+            SUBJECTS_ETL_NO_ALERTA, 
+            BODY_TEMPLATES_NO_ALERTA
+        )
+    else:
+        lst_email = ['sebastian.nunez@sbdinc.com','Adrian.Orozco@sbdinc.com','Horacio.Osorio@sbdinc.com']
+        #lst_email = ['sebastian.nunez@sbdinc.com']
+        send_etl_report(
+            resultados_ejecucion, 
+            lst_email, 
+            SUBJECTS_ETL_ALERTA, 
+            BODY_TEMPLATES_ALERTA
+        )
 
 if __name__ == "__main__":
     try:

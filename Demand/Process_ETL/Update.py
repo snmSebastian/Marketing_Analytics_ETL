@@ -26,7 +26,7 @@ import sys
 # La importación debe ser relativa al paquete actual.
 from Fill_Rate.Process_ETL.Process_Files import  group_parquet,format_columns
 from Demand.Process_ETL.Process_Files import *
-from Sales.Process_ETL.Process_Files import assign_fk_YearRegionSku
+from Sales.Process_ETL.Process_Files import assign_fk_YearRegionSku,assign_NSV_NPI_w_Combo
 
 
 def main():
@@ -50,18 +50,20 @@ def main():
         None
     """
     # Importar las rutas de acceso rápido desde config_paths.py.,
-    from config_paths import DemandPaths,MasterProductsPaths
+    from config_paths import DemandPaths,MasterProductsPaths,SalesPaths
     from Fill_Rate.Process_ETL.Process_Files import clean_sku
     demand_update_raw_dir = DemandPaths.INPUT_RAW_UPDATE_DIR
     country_code_file = DemandPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
     processed_parquet_dir = DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
-    fx_rate=DemandPaths.INPUT_PROCESSED_FX_RATE_FILE
     path_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
     path_sku_name=MasterProductsPaths.INPUT_RAW_SkuName_FILE
-    processed_gross_to_net=DemandPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
     md_product_processed_file=DemandPaths.INPUT_PROCESSED_MASTER_PRODUCTS_FILE
     npi=DemandPaths.INPUT_PROCESSED_NPI_FILE
+    fx_rate=DemandPaths.INPUT_PROCESSED_FX_RATE_FILE
+    processed_gross_to_net=DemandPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
+    npi=SalesPaths.INPUT_PROCESSED_NPI_FILE
 
+   
      #===============================
     # --- Lectura de archivos 
     #===============================
@@ -73,23 +75,24 @@ def main():
     df_country = pd.read_excel(country_code_file,
                                sheet_name='Code Country Demand', dtype=str, engine='openpyxl')
     df_country_nsv = pd.read_excel(country_code_file,
-                               sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+                               sheet_name='Code Country Fillrate', dtype=str, engine='openpyxl')
     
-    #df_fx_rate = pd.read_excel(fx_rate, dtype=str, engine='openpyxl')
     df_gpp=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='GPP')
     df_skuName=pd.read_parquet(path_sku_name, engine='pyarrow')
 
     df_md_product=pd.read_excel(md_product_processed_file,dtype=str, engine='openpyxl')
     df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
     df_npi=pd.read_excel(npi,sheet_name='Database',dtype=str, engine='openpyxl')
+    df_npi_concat=pd.read_excel(npi,sheet_name='NPI Concat',dtype=str, engine='openpyxl')
 
     #=========================================
     #Limpieza sku
     #=========================================
     df_md_product=clean_sku(df_md_product,'SKU')
     df_npi=clean_sku(df_npi,'SKU')
+    df_npi_concat=clean_sku(df_npi_concat,'SKU')
     df_skuName=clean_sku(df_skuName,'SKU')
-
+    
 
 
     # Definir las columnas relevantes para el procesamiento.    
@@ -114,19 +117,21 @@ def main():
     df_processed=assign_NPI_New_Carryover(df_processed,df_npi,df_country_nsv)
     print(f'longitud posterior a asignación NPI: {len(df_processed)}')
 
+    df_processed=assign_NSV_NPI_w_Combo(df_processed,df_npi_concat)
+
     df_processed=assign_fk_YearRegionSku(df_processed,df_country_nsv)
     print(f'longitud posterior a asignación fk_YearRegionSku: {len(df_processed)}')
 
-
+    df_processed=sodimac(df_processed)
 
     #--- Formato de columnas ----
     lst_columns_str = ['fk_Date','fk_year_month', 'fk_Country', 'fk_SKU','SKU Description','Brand','Demand Group','Plant Code',
                        'GPP SBU','GPP Division Description','GPP Category Description','GPP Portfolio Description',
                        'New New/Carryover',
-                       'fk_YearRegionSku']
+                       'fk_YearRegionSku','Sodimac']
     lst_columns_float=['FCST_QTY', 'FORECAST_VALUE_GSV','NSV',
                   'CURRENT_STANDARD_COST',
-                  'NPI Incremental Sales $']
+                  'NPI Incremental Sales $','Net Sales NPI w/Combo']
     df_processed=format_columns(df_processed,lst_columns_str,lst_columns_float)
     df_processed.columns
     #=========================================================
@@ -155,6 +160,7 @@ def main():
     #delete_parquet_files(processed_parquet_dir)
     # --- Agrupacion en archivos parquets
     group_parquet(df_processed, processed_parquet_dir,name='demand')
+    print(df_processed.columns)
 
 
 # --- EJECUCION DEL SCRIPT ---

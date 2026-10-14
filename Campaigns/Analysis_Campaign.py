@@ -7,36 +7,8 @@ from Sales.Process_ETL.Update import read_files_parquets
 # FUNCIONES DE SOPORTE PARA MÉTRICAS AVANZADAS
 # =========================================================================
 
-def  generate_key(df_campaigns,df_datamind_meli_sales):
-    #====================
-    # ---- CAMPAIGNS
-    #====================
-    df_campaigns = df_campaigns.rename(columns={
-        'País': 'Country',
-    })
-    #---COUNTRY
-    df_campaigns.columns = df_campaigns.columns.str.strip()
-    df_campaigns['Country'] = df_campaigns['Country'].str.strip()
-    
-    # Corrección sintáctica usando un diccionario {} y comas
-    df_campaigns['Country'] = df_campaigns['Country'].replace({
-        'AR': 'Argentina',
-        'BR': 'Brazil',
-        'CL': 'Chile',
-        'CO': 'Colombia',
-        'CR': 'Costa Rica',
-        'GT': 'Guatemala',
-        'HN': 'Honduras',
-        'MX': 'Mexico',
-        'PA': 'Panama',
-        'SV': 'El Salvador'
-    })
-     #--- DATE CAMPAÑAS
-    df_campaigns['Week End'] = df_campaigns['Semana'].str[-10:]
-    df_campaigns['Week End'] = pd.to_datetime(df_campaigns['Week End'], errors='coerce')
-    iso_cal_sales = df_campaigns['Week End'].dt.isocalendar()
-    df_campaigns['Year_Week'] = (iso_cal_sales.year.astype(str) + 
-                            iso_cal_sales.week.astype(str).str.zfill(2)).astype(int)
+def  generate_sales_agg(df_datamind_meli_sales):
+
 
     #=================
     #--- SALES
@@ -53,22 +25,15 @@ def  generate_key(df_campaigns,df_datamind_meli_sales):
     for col in metrics:
         df_datamind_meli_sales[col] = pd.to_numeric(df_datamind_meli_sales[col], errors='coerce').fillna(0)
 
-    df_campaigns['key'] = (
-        df_campaigns['Country'].astype(str) + "_" + 
-        df_campaigns['Brand'].astype(str) + "_" + 
-        df_campaigns['Year_Week'].astype(str)
-    )
+   
     
     df_datamind_meli_sales['key'] = (
         df_datamind_meli_sales['Country'].astype(str) + "_" + 
         df_datamind_meli_sales['Brand'].astype(str) + "_" + 
         df_datamind_meli_sales['Year_Week'].astype(str)
     )
-    df_campaigns['key'] = df_campaigns['key'].astype(str).str.lower().str.replace(' ', '')
     df_datamind_meli_sales['key'] = df_datamind_meli_sales['key'].astype(str).str.lower().str.replace(' ', '')
    
-
-    df_campaigns=df_campaigns.sort_values(by=['key'])
     df_datamind_meli_sales=df_datamind_meli_sales.sort_values(by=['key'])
 
     #----VENTAS AGRUPADAS POR KEY
@@ -82,26 +47,56 @@ def  generate_key(df_campaigns,df_datamind_meli_sales):
         'Unidades vendidas': 'sum',
         'Precio Publico Estimado': 'mean' 
     }).reset_index()
-    print('df_sales_agg')
-    print(f'len(df_sales_agg){len(df_sales_agg)}')
-    df_sales_agg.to_excel
-    
-    #--- MERGE
-    df_campaigns=df_campaigns.drop(columns=['Country', 'Brand', 'Year_Week'])
-    df_merged = pd.merge(
-        df_campaigns, 
-        df_sales_agg[['key','Country', 'Brand', 'Year_Week',  'Venta neta', 'Venta costo', 'Venta bruta', 'Unidades vendidas', 'Precio Publico Estimado']], 
-        on='key', 
-        how='right'
-    )
    
+    return df_sales_agg
 
-    df_merged = df_merged.sort_values(by=['key'])
-    print('df_camp')
-    df_merged.to_excel("dataset_atribucion_final.xlsx", index=False)
+def generate_campaings_agg(df_campaigns):
+    # =========================================================================
+    # 0. INYECCIÓN DEL PRESUPUESTO SEMANAL CONSOLIDADO
+    # =========================================================================
+    # Agrupamos el archivo de campañas para saber cuánto se gastó en total por marca/semana
+    df_camp_clean = df_campaigns.copy()
+    df_camp_clean['Country'] = df_camp_clean['Country'].replace({
+        'AR': 'Argentina',
+        'BR': 'Brazil',
+        'CL': 'Chile',
+        'CO': 'Colombia',
+        'CR': 'Costa Rica',
+        'GT': 'Guatemala',
+        'HN': 'Honduras',
+        'MX': 'Mexico',
+        'PA': 'Panama',
+        'SV': 'El Salvador'
+    })
+    df_camp_clean['Week End'] = df_camp_clean['Semana'].str[-10:]
+    df_camp_clean['Week End'] = pd.to_datetime(df_camp_clean['Week End'], errors='coerce')
+    iso_cal_sales = df_camp_clean['Week End'].dt.isocalendar()
+    df_camp_clean['Year_Week'] = (iso_cal_sales.year.astype(str) + iso_cal_sales.week.astype(str).str.zfill(2)).astype(int)
 
-    return df_merged
+    df_camp_clean['key']=df_camp_clean['Country']+'_'+df_camp_clean['Brand']+'_'+df_camp_clean['Year_Week'].astype(str)
+    df_camp_clean['key'] = df_camp_clean['key'].astype(str).str.lower().str.replace(' ', '')
 
+     #----CAMPAÑAS AGRUPADAS POR KEY
+    df_camp_clean=df_camp_clean.groupby(['key']).agg({
+         'Country': 'first',      
+        'Brand': 'first',
+        'Year_Week': 'first',
+        'Alcance': 'sum',
+        'Impresiones': 'sum',
+        'Importe gastado (USD)': 'sum' 
+    }).reset_index()     
+
+    return df_camp_clean
+
+def merge_info(df_sales_agg,df_campaigns_agg):
+    df_merge=pd.merge(
+        df_campaigns_agg,
+        df_sales_agg[['key','Venta neta','Venta costo','Venta bruta','Unidades vendidas','Precio Publico Estimado']],
+        on='key',
+        how='left'
+    )
+    df_merge=df_merge.sort_values(by=['key'])
+    return df_merge
 
 def aplicar_adstock(series, alpha=0.15):
     """
@@ -115,67 +110,86 @@ def aplicar_adstock(series, alpha=0.15):
         else:
             adstock[t] = inversion[t] + alpha * adstock[t-1]
     return adstock
-import pandas as pd
-import numpy as np
 
-def metrics_campaigns(df_campaigns):
+
+def metrics(df_merge):
     """
-     Procesa el detalle histórico microscópico de marketing.
+    Agrupa informacion de venta y campañas por country-brand-yearweek, y genera metricas
     """
-    # Clonamos para evitar advertencias de copia en Pandas
-    df_medios = df_campaigns.copy()
-    
-    # =========================================================================
-    # 0. LIMPIEZA INICIAL
-    # =========================================================================
-    # Forzar que la inversión sea numérica y rellenar vacíos con 0
-    df_medios['Importe gastado (USD)'] = pd.to_numeric(df_medios['Importe gastado (USD)'], errors='coerce').fillna(0)
-    df_medios['Impresiones'] = pd.to_numeric(df_medios['Impresiones'], errors='coerce').fillna(0)
-    df_medios['Alcance'] = pd.to_numeric(df_medios['Alcance'], errors='coerce').fillna(0)
-    
-    # Ordenamiento cronológico por si se requiere auditoría visual
-    df_medios = df_medios.sort_values(by=['Country', 'Brand', 'Year_Week']).reset_index(drop=True)
+    df_camp_sls=df_merge.copy()
+    # Orden cronológico estricto para no corromper las series temporales
+    df_camp_sls = df_camp_sls.sort_values(by=['key']).reset_index(drop=True)
+    df_camp_sls=df_camp_sls.rename(columns={'Importe gastado (USD)':'Inversion_Total_Semana'})
 
     # =========================================================================
-    # BLOQUE 1: MÉTRICAS DE MEDIOS DIGITALES (El Esfuerzo Puro)
+    #  MÉTRICAS DE MEDIOS DIGITALES (El Esfuerzo Puro)
     # =========================================================================
     # Frecuencia de Medios: Cuántas veces vio el anuncio una persona única en esta campaña
-    df_medios['Frecuencia_Medios'] = np.where(
-        df_medios['Alcance'] > 0, 
-        df_medios['Impresiones'] / df_medios['Alcance'], 
+    df_camp_sls['Frecuencia_Medios'] = np.where(
+        df_camp_sls['Alcance'] > 0, 
+        df_camp_sls['Impresiones'] / df_camp_sls['Alcance'], 
         0
     )
     
     # CPM Real: Costo por cada 1,000 impresiones a nivel de campaña individual
-    df_medios['CPM_Real'] = np.where(
-        df_medios['Impresiones'] > 0,
-        (df_medios['Importe gastado (USD)'] / df_medios['Impresiones']) * 1000,
+    df_camp_sls['CPM_Real'] = np.where(
+        df_camp_sls['Impresiones'] > 0,
+        (df_camp_sls['Inversion_Total_Semana'] / df_camp_sls['Impresiones']) * 1000,
         0
     )
-
     # =========================================================================
-    # BLOQUE 2: TRANSICIÓN Y MODELADO DE PRESUPUESTO
+    #  MÉTRICAS DE TRANSICIÓN Y MODELADO
     # =========================================================================
-    # Adstock Individual: Memoria publicitaria que deja esta campaña específica en su cohorte
-    # (Nota: En Power BI se sumará por semana para ver el Adstock consolidado de la marca)
-    df_medios['Inversion_Adstock_USD'] = df_medios.groupby(['Country', 'Brand'])['Importe gastado (USD)'].transform(
+    # Inversión Adstock: Usa la inversión consolidada de la semana sobre la línea temporal continua
+    df_camp_sls['Inversion_Adstock_USD'] = df_camp_sls.groupby(['Country', 'Brand'])['Inversion_Total_Semana'].transform(
         lambda x: aplicar_adstock(x, alpha=0.15)
     )
+    
+    '-----------NOTA--'
+    # =======================================================================
+    #-- EVALUAR SI HAY UNA MEJOR OPCION PARA CLASIFICAR LE EFICIENCIA
+    #  eficiente si una campaña saturada vendio mas que el promedio de semanas anteriores donde estuvo activa
+    # la saturacion debe ser con inversion adstock
+    # =======================================================================
+        
+    # Umbral de saturación por País y Marca basado en el gasto consolidado de la semana
+    
+    df_camp_sls['Umbral_Saturacion'] = df_camp_sls.groupby(['Country', 'Brand'])['Inversion_Total_Semana'].transform(
+        lambda x: x.quantile(0.80)
+    ) 
+    df_camp_sls['sales_avg'] = (
+        df_camp_sls.groupby(['Country', 'Brand'])['Venta neta']
+        .transform(lambda x: x.rolling(window=4, min_periods=1).mean())
+    )
+
+    # esta medida no es apropiada para el contexto
+    df_camp_sls['Alerta_Saturacion'] = np.where(
+        (df_camp_sls['Inversion_Total_Semana'] > df_camp_sls['Umbral_Saturacion']) & 
+        (df_camp_sls['Venta neta'] < df_camp_sls['sales_avg']),
+        "Saturado: Reducir Presupuesto",
+        "Eficiente"
+    )
+
+
+    #df_merge = df_merge.drop(columns=['Margen_Bruto_Total_Temp', 'Umbral_Saturacion'], errors='ignore')
+
 
     # =========================================================================
-    # 3. SELECCIÓN Y RETORNO DEL ENTREGABLE DE MARKETING (TABLA A)
+    # 5. SELECCIÓN VARIABLES
     # =========================================================================
-    # Excluimos de forma estricta cualquier columna de ventas, costos, márgenes o stock
-    columnas_finales_a = [
-        'Country', 'Year_Week', 'Brand', 'Nombre de la campaña', 'Campaign Consolidated', 'Type Campaign',
-        'Importe gastado (USD)', 'Impresiones', 'Alcance', 'Frecuencia_Medios', 'CPM_Real', 'Inversion_Adstock_USD'
+    columnas_finales_b = [
+        'Country', 'Year_Week', 'Brand', 'Venta neta',
+        'Venta bruta', 'Venta costo', 'Unidades vendidas', 'Precio Publico Estimado',       
+          'Margen_Bruto_Total', 'Inversion_Total_Semana', 'Inversion_Adstock_USD', 'Alerta_Saturacion',
+        'Margen_Base_Organico', 'Margen_Incremental_Estimado',
+        'Alerta_Disponibilidad_Stock', 'Costo_Oportunidad_Stock_USD', 'Profundidad_Descuento_Retail'
     ]
     
-    # Aseguramos retornar solo las columnas existentes mapeadas
-    df_tabla_a_final = df_medios[[col for col in columnas_finales_a if col in df_medios.columns]]
+    #df_merge = df_merge[[col for col in columnas_finales_b if col in df_merge.columns]]
+    #print(f"*** Metricas Avanzadas: {len(df_merge)} ***")
     
-    print(f"*** TABLA A CREADA exitosamente. Detalle de campañas exportado con {len(df_tabla_a_final)} registros. ***")
-    return df_tabla_a_final
+    return df_camp_sls
+
 
 
 # =========================================================================
@@ -198,31 +212,20 @@ def main():
     df_campaigns = pd.read_excel(PATH_CAMPAIGNS)
     df_sov.columns = df_sov.columns.str.strip()
 
+    #===========================================================
+    #--- ESTE PEDASO DE CODIGO SE CREO SOLO PARA CREAR UN  ARCHIVO DE VENTAS AGRUPADAS
+    #===========================================================
+    df_sales_agg= generate_sales_agg(df_datamind_meli_sales)
     print('df_datamind_meli_sales')
-    print(f'len(df_datamind_meli_sales){len(df_datamind_meli_sales)}')
-    # Limpiar espacios en blanco en los nombres de las columnas para evitar KeyErrors
-   
+    df_campaigns_agg=generate_campaings_agg(df_campaigns)
+    df_camp_sales=merge_info(df_sales_agg,df_campaigns_agg)
 
+    df_metrics=metrics(df_camp_sales)
+     
+    print('df_sales_metrics')
 
-    # --------------------------
-    # ---  AGREGACIÓN DE VENTAS DATAMIND
-    # --- (Se agrupa de SKU/Retailer diario a nivel País, Semana y Marca)
-    # ------------------------
-    
-    df_merged=generate_key(df_campaigns,df_datamind_meli_sales)
-    
-    # --------------------------
-    # --- PROCESAMIENTO AVANZADO
-    # -------------------------
-    df_output_powerbi = calcular_metricas_avanzadas(df_merged)
-    df_output_powerbi.to_excel(PATH_CAMPAIGNS_ANALYSIS)
+    df_metrics.to_excel(PATH_CAMPAIGNS_ANALYSIS)
 
-    # Opcional: Integrar aquí la tabla df_sov si necesitas consolidar el Share of Voice
-
-    # --------------------------
-    # --- EXPORTAR RESULTADOS A TU RUTA DE PREFERENCIA
-    # -------------------------
-    # df_output_powerbi.to_csv("Ruta_OneDrive_SBD/Dataset_Atribucion_Final.csv", index=False, encoding='utf-8-sig')
     print("¡Dataset final procesado con éxito!")
 
 if __name__ == "__main__":

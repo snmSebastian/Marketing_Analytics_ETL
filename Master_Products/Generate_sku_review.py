@@ -189,6 +189,8 @@ def main():
         )
         df_new_products['GPP']=df_new_products['GPP SBU']+'-'+df_new_products['GPP Division Code']+'-'+df_new_products['GPP Category Code']+'-'+df_new_products['GPP Portfolio Code']
 
+
+
         condicion = (df_new_products['GPP'] == '---') | (df_new_products['GPP'].str.len() < 6) | (df_new_products['GPP'].isna())
         df_new_products.loc[condicion, 'GPP'] = np.nan  # Usa np.nan para que pandas lo trate como nulo real
 

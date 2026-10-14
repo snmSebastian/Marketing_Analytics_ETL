@@ -9,7 +9,7 @@ ejecuta el código de Python y, al finalizar, valida el código de salida ($LAST
 para enviarte una notificación por correo confirmando si la carga fue exitosa o si 
 el proceso falló en algún punto.
 """
-# ---  Definir la ubicación del proyecto ---
+# --- 1. Definir la ubicación del proyecto ---
 $ProjectRoot = "C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Scripts"
 $PythonExe = "$ProjectRoot\venv_Scripts_RMA\Scripts\python.exe"
 

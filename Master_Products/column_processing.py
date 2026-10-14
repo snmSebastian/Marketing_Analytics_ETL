@@ -425,24 +425,25 @@ def assign_bare(sku,quantity_batteries,corded_or_cordless):
         else:
             return '-'
         
-def assign_sub_brand(sku,description,brand):
+def assign_sub_brand(sku, description, brand):
     """
-    Asigna la Sub-Marca del producto basada en reglas específicas del negocio (ej., FATMAX, IAR EXPERT) verificando la
-    descripción y el código SKU.
+    Asigna la Sub-Marca del producto basada en reglas específicas del negocio (ej., FATMAX, IAR EXPERT) 
+    verificando la descripción y el código SKU.
     """
+    # Convertimos a string primero para evitar errores con valores nulos (NaN / float)
+    sku_str = str(sku).strip().upper()
+    desc_str = str(description).strip().upper().replace(' ', '')
+    brand_str = str(brand).strip().upper().replace(' ', '')
 
-    description = description.strip().upper().replace(' ', '')
-    brand = brand.strip().upper().replace(' ', '')
-    description = str(description).strip().upper().replace(' ', '')
-    brand = str(brand).strip().upper().replace(' ', '')
-    if 'FATMA' in description:
+    if 'FATMA' in desc_str:
         return 'FATMAX'
-    elif sku.startswith('E') and brand == 'FACOM':
+    elif sku_str.startswith('E') and brand_str == 'FACOM':
         return 'IAR EXPERT'
-    elif sku.startswith('STA82'):
+    elif sku_str.startswith('STA82'):
         return 'MASS'
     else:
         return "-"  # Retorna la marca original si no se encuentra una sub-marca específica
+
 
 def review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp):
 
@@ -474,10 +475,7 @@ def review_sku_base_with_diferent_category(df_master_products,lst_colums_gpp):
     df_resultado=df_resultado[lst_colums_gpp]  
     return df_resultado 
 
-
-
-
-def assign_proyects(df_master, df_proyects, df_dewaltXR, df_dw_ind):
+def assign_proyects(df_master, df_proyects, df_dewaltXR, df_dw_ind,df_dw_pyp,df_powerconnect):
     """
     Realiza una clasificación jerárquica de productos y asignación de proyectos.
     * Dewalt XR
@@ -505,6 +503,14 @@ def assign_proyects(df_master, df_proyects, df_dewaltXR, df_dw_ind):
     # Industrial Type
     ind_map_sku = df_dw_ind.dropna(subset=['SKU']).drop_duplicates('SKU').set_index('SKU')['Industrial Type']
     ind_map_base = df_dw_ind.dropna(subset=['SKU Base']).drop_duplicates('SKU Base').set_index('SKU Base')['Industrial Type']
+    # Dewalt P&P
+    pyp_map_sku = df_dw_pyp.dropna(subset=['SKU']).drop_duplicates('SKU').set_index('SKU')['Perform & Protect']
+    pyp_map_base = df_dw_pyp.dropna(subset=['SKU Base']).drop_duplicates('SKU Base').set_index('SKU Base')['Perform & Protect']
+
+    # PowerConnect
+    pc_map_sku = df_powerconnect.dropna(subset=['SKU']).drop_duplicates('SKU').set_index('SKU')['Power Connect 20V']
+    pc_map_base = df_powerconnect.dropna(subset=['SKU Base']).drop_duplicates('SKU Base').set_index('SKU Base')['Power Connect 20V']
+
     # 2. Aplicar asignación con .map() y .fillna()
     # Este método evita crear columnas duplicadas (_base) y tener que borrarlas luego
     
@@ -515,17 +521,45 @@ def assign_proyects(df_master, df_proyects, df_dewaltXR, df_dw_ind):
     df_master['Dewalt XR'] = df_master['SKU'].map(xr_map_sku)
     df_master['Dewalt XR'] = df_master['Dewalt XR'].fillna(df_master['SKU Base'].map(xr_map_base))
     # Asignar Industrial Type
-    df_master['Dewalt Industrial'] = df_master['SKU'].map(ind_map_sku)
-    df_master['Dewalt Industrial'] = df_master['Dewalt Industrial'].fillna(df_master['SKU Base'].map(ind_map_base))
+    df_master['DW Ind/HvyInd'] = df_master['SKU'].map(ind_map_sku)
+    df_master['DW Ind/HvyInd'] = df_master['DW Ind/HvyInd'].fillna(df_master['SKU Base'].map(ind_map_base))
+    # Asignar Dewalt P&P
+    df_master['DeWalt P&P'] = df_master['SKU'].map(pyp_map_sku)
+    df_master['DeWalt P&P'] = df_master['DeWalt P&P'].fillna(df_master['SKU Base'].map(pyp_map_base))
+    
+    # Asignar PowerConnect
+    df_master['Power Connect'] = df_master['SKU'].map(pc_map_sku)
+    df_master['Power Connect'] = df_master['Power Connect'].fillna(df_master['SKU Base'].map(pc_map_base))
+    
+
     # 3. Lógica B+D (Vectorizada)
     # Limpiamos strings una sola vez para ganar eficiencia
     clean_brand = df_master['Brand'].str.lower().str.strip()
-    clean_proj = df_master['Project Name'].str.lower().str.strip()
-    
-    mask_bdk = (clean_brand == 'black+decker') & (clean_proj == 'power connect 20v')
+    mask_brand = clean_brand.str.contains('black|decker|b\+d', regex=True, na=False)
+
+
+    # Captura "power connect 20v" aunque tenga espacios invisibles antes o después, o texto extra
+    mask_proj = df_master['Power Connect'].astype(str).str.lower().str.contains('power connect 20v', na=False)
+    mask_bdk = mask_brand & mask_proj
+
     df_master.loc[mask_bdk, 'B+D Power Connect 20V'] = 'B+D Power Connect 20V'
     return df_master
 
+def assing_st_top_categories(df):
+    # Definimos las listas de categorías para que el código sea más limpio
+    sbu_validos = ['HMT', 'STR']
+    categorias_validas = ['hardlines', 'tapes', 'storage', 'pliers', 'screwdrivers', 'knives & blades']
+    
+    # Aplicamos la lógica corregida con .isin()
+    df['ST Top Categories'] = np.where(
+        (df['Brand'].str.lower().str.strip() == 'stanley') &
+        (df['GPP SBU'].isin(sbu_validos)) &
+        (df['Category Group'].str.lower().str.strip().isin(categorias_validas)),
+        df['Category Group'], # Si cumple
+        'Others'              # Si no cumple
+    )
+    return df
 
+    
 
 

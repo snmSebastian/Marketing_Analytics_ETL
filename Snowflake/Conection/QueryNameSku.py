@@ -42,14 +42,14 @@ def main():
     """
     from config_paths import MasterProductsPaths
     SkuName_update_raw_dir = MasterProductsPaths.INPUT_RAW_SkuName_FILE
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: MASTER PRODUCTS DATA EXTRACTION ---")
-    print("=" * 55)
+    print("-" * 55)
+    print("---  INICIANDO PROCESO: MASTER PRODUCTS DATA EXTRACTION ---")
+    print("-" * 55)
     conexion=conectar_snowflake_sso(Database="PROD_EDW",Schema="DIMENSIONS")
     #conexion=conectar_snowflake_password(Database="PROD_EDW",Schema="DIMENSIONS")
     sql="""
               SELECT 
-            prod_id_hrmz as SKU,
+           coalesce(prod_id_hrmz,prod_id_hrmz_key,prod_id_hrmz_parent) as SKU,
             prod_desc_hrmz  AS "SKU Description",
 
             final_brand as "Brand",
@@ -73,6 +73,8 @@ def main():
             FINAL_GPP_DESC_SYS as "System"
 
         FROM PROD_EDW.DIMENSIONS.DIM_FINAL_PRODUCT
+         WHERE FINAL_GPP_DESC_SYS IN ('SAPC11','SAPE03','QADAR','SAPBYD','QADCH','QADPE','QADBR')
+        
        
 
     """
@@ -82,7 +84,7 @@ def main():
     df_queryNameSku=clean_sku(df_queryNameSku,'SKU')
     df_queryNameSku.to_parquet(SkuName_update_raw_dir, index=False)
     #print(df_queryDemand.head())
-    print("--- 🔄 PROCESO FINALIZADO: MASTER PRODUCTS DATA EXTRACTION ---")
+    print("--- PROCESO FINALIZADO: MASTER PRODUCTS DATA EXTRACTION ---")
 
 
 if __name__ == "__main__":

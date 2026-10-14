@@ -282,7 +282,7 @@ def main():
         df_customers_clasifications = pd.read_excel(customers_shared,sheet_name='Clasifications', dtype=str, engine='openpyxl')
         print('read customers clasificario')
         df_country = pd.read_excel(country_code_file,
-                                    sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+                                    sheet_name='Code Country Fillrate', dtype=str, engine='openpyxl')
         print('read country')
         df_notation_customers=pd.read_excel(notation_customers_file, dtype=str, engine='openpyxl')
         print('notation ')
@@ -301,7 +301,7 @@ def main():
                                             'Name_Customer':'Sold-To Customer Name',
                                             'Sold-To Dist Channel Shared':'fk_Dist_Channel'},inplace=True)
         
-        df_all_customers=pd.concat([df_customers_shared, df_customers_datalake], ignore_index=True).drop_duplicates(['fk_Sold-To Customer Code','fk_Country'], keep='first')
+        df_all_customers=pd.concat([df_customers_datalake,df_customers_shared], ignore_index=True).drop_duplicates(['fk_Sold-To Customer Code','fk_Country'], keep='first')
         print('df_all_customers')
         
         # --- LECTURA Y CONSOLIDACIÓN DE DATOS DE ACTUALIZACIÓN --

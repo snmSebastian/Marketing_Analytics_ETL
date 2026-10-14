@@ -32,6 +32,7 @@ import numpy as np
 import sys
 
 from Fill_Rate.Process_ETL.Process_Files import clean_sku
+from Master_Products.Update_md_products import update_master_data
 
 
 
@@ -54,15 +55,15 @@ def update_file_hts(md_product,lst_columns_hts,df_hts):
     # determino una lst que indica si el sku del md esta en el archivo de hts
     mask_sku_md=df_filter_hts['SKU'].isin(df_hts['SKU'])
     # asigno si el sku es nuevo o no
-    df_filter_hts['check_sku']=np.where(
+    df_filter_hts['source_sku']=np.where(
                                 mask_sku_md, 
-                                'Old sku', 
-                                'New sku'
+                                'SKU Ya Existente', 
+                                'Nueva Existencia'
                              )
   
     # ordeno dataframe de salida
-    df_filter_hts=df_filter_hts.sort_values(by=['check_sku','SKU','SKU Base'])
-    df_filter_hts=df_filter_hts[lst_columns_hts+['check_sku']]
+    df_filter_hts=df_filter_hts.sort_values(by=['source_sku','SKU','SKU Base'])
+    df_filter_hts=df_filter_hts[lst_columns_hts+['source_sku']]
     df_filter_hts=df_filter_hts.fillna('-')
     return df_filter_hts
 
@@ -95,8 +96,18 @@ def main():
         #-------------------
         df_hts=clean_sku(df_hts,'SKU')
         df_md_product=clean_sku(df_md_product,'SKU')
-        
-        df_filter_hts=update_file_hts(df_md_product,lst_columns_hts,df_hts)
+
+
+        #------  Agregar info HTS 
+        # Primero agrego la informacion de hts al md products, para asi cuando actualice hts, no se pierda ningun ajuste
+        #completa los nulos en 'Big Rock', 'Top Category' con info de jorge
+        lst_hts=[ 'SKU Base', 'SKU Description', 'Brand','Big Rock', 'Category Group', 'Categoria HTS', 'Familia HTS',
+                        'Sub Familia HTS', 'Clase HTS', 'NPI Project HTS', 'Posicionamiento HTS']
+        df_update_md = update_master_data(df_md_product, df_hts, 'SKU', lst_hts)
+
+        #Ahora que el archivo de md products esta actualizado
+        # Tomo toda la info de HTS Y STR para actualizar el archivo de Jorge
+        df_filter_hts=update_file_hts(df_update_md,lst_columns_hts,df_hts)
         df_filter_hts.to_excel(path_hts, index=False)
         print("Proceso de actualización de productos completado exitosamente.")
         pass

@@ -70,6 +70,8 @@ def  main():
     path_coppel = Datamind_PATHS.INPUT_RAW_COPPEL_FILE
     path_edas=Datamind_PATHS.INPUT_RAW_EDAS_FILE
 
+    path_fx=Datamind_PATHS.INPUT_PROCESSED_FX_RATE_FILE
+
     path_meli_sales=Datamind_PATHS.INPUT_RAW_MELI_SALES_FILE
     path_meli_sku=Datamind_PATHS.INPUT_RAW_MELI_SKU_FILE
 
@@ -91,13 +93,16 @@ def  main():
         df_datamind_week = assing_sales_channel(df_datamind_week)
         df_datamind_week = solution_thd(df_datamind_week)
         df_datamind_week = solution_coppel(df_datamind_week, path_coppel)
+        df_datamind_week=nsv_usd(df_datamind_week,path_fx)
         print('>>> Datamind: Canales asignados y lógica THD/Coppel aplicada.')
 
 
         #===========================
         #--- MERCADO LIBRE
         #===========================
-        df_meli_sales=meli(path_meli_sales, path_meli_sku,lst_columns)
+        df_meli_sales_group=group_meli(path_meli_sales)
+        df_meli_sales=meli(df_meli_sales_group, path_meli_sku,lst_columns)
+        df_meli_sales=clean_sku(df_meli_sales,'SKU')
         print('>>> Mercado Libre: Datos procesados.')
 
 
@@ -105,13 +110,15 @@ def  main():
         #---EDAS
         #==============
         df_edas=edas(path_edas,lst_columns)
+        df_edas=clean_sku(df_edas,'SKU')
         print('>>> EDAS: Datos procesados.')
        
 
-        #==================================
-        #--- DATAMIND - MERCADO LIBRE
-        #==================================
+        #======================================
+        #--- DATAMIND - MERCADO LIBRE -- EDAS
+        #======================================
         df_datamind_meli_edas=pd.concat([df_datamind_week[lst_columns],df_meli_sales[lst_columns],df_edas[lst_columns]],ignore_index=True)
+        
         #-- BRAND
         
          # Crear el mapa inverso solo una vez
@@ -123,8 +130,12 @@ def  main():
         df_datamind_meli_edas['Brand'] = df_datamind_meli_edas['Brand_Normalized'].map(brand_map_inverse).fillna(df_datamind_meli_edas['Brand'])
         df_datamind_meli_edas = df_datamind_meli_edas.drop(columns=['Brand_Normalized']) 
 
+        df_datamind_meli_edas['Country'] = df_datamind_meli_edas['Country'].str.strip().str.lower()
+        df_datamind_meli_edas['Country'] = df_datamind_meli_edas['Country'].replace({'méxico': 'mexico', 'perú': 'peru','salvador':'el salvador'})
+
+
         #--- UPDATE
-        #dataframe con el year-month que contiene week que sera actualizada o agregada
+        #dataframe con el year-month que contiene weeks que seran actualizadas o agregadas
         print('>>> Iniciando proceso de Upsert Incremental...')
         metrics = ['Venta neta', 'Venta bruta', 'Venta costo', 'Unidades vendidas', 'Precio Publico Estimado']
         df_datamind_meli_historic = read_files_parquets(Datamind_PATHS.OUTPUT_PROCESSED_PARQUETS_DIR, df_datamind_meli_edas,'Datamind_Meli_Sales_',metrics)
@@ -132,17 +143,13 @@ def  main():
         #agrego a los archivos year-month, la actualizacion de las semanas
         df_datamind_meli_edas_update = update_datamind_meli(df_datamind_meli_edas, df_datamind_meli_historic)
         print('>>> Consolidación final completada.')
-        df_datamind_meli_edas_update['Country'] = df_datamind_meli_edas_update['Country'].str.strip().str.lower()
-        df_datamind_meli_edas_update['Country'] = df_datamind_meli_edas_update['Country'].replace({'méxico': 'mexico', 'perú': 'peru','salvador':'el salvador'})
-
-        df_datamind_meli_edas_update=clean_sku(df_datamind_meli_edas_update,'SKU')
-
+        
         
         group_parquet(df_datamind_meli_edas_update, Datamind_PATHS.OUTPUT_PROCESSED_PARQUETS_DIR,name='Datamind_Meli_Sales')
 
-        df_sku=df_datamind_meli_edas_update[['Source','Date','Year-Month','Year-Week','Country','Retailer','Brand','SKU']].drop_duplicates('SKU')
-        r = r"C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Sebastian\sku_datamind.xlsx"
-        df_sku.to_excel(r,index=False)
+        #df_sku=df_datamind_meli_edas_update[['Source','Date','Year-Month','Year-Week','Country','Retailer','Brand','SKU']].drop_duplicates('SKU')
+        #r = r"C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Sebastian\sku_datamind.xlsx"
+        #df_sku.to_excel(r,index=False)
         print(">>> Proceso finalizado exitosamente. ✅")
     except Exception as e:
         print(f"Error en procesamiento de datos de Ventas Datamind: {e}")

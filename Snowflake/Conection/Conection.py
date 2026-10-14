@@ -84,15 +84,14 @@ def conectar_snowflake_password(Database:str, Schema:str):
 
     # --- CONFIGURACIÓN DE PARÁMETROS DE CONEXIÓN --
     conn_params = {
-    "account": "PAA12529-SBD_CASPIAN",
-    "user": "SVC-LAGBI@sbdinc.com", 
-    "authenticator": "externalbrowser",
-    "role": "SVC_LAGBI_ROLE",
-    "warehouse": "DEV_AIDA_WH",
-    "database": Database,
-    "schema": Schema
+        "account": "PAA12529-SBD_CASPIAN", # Identificador de la cuenta extraído del servidor
+        "user": "SVC-PowerBI-BrazilBI",       # El usuario de la cuenta de servicio
+        "password": r"{4yaeH-s5u.OTbzk'I1)",   # Contraseña provista
+        "role": "SVC_POWERBI_BRAZILBI_RW",    # Nuevo rol asignado
+        "warehouse": "PROD_PBI_WH",           # Nuevo warehouse de producción
+        "database": Database,
+        "schema": Schema
     }
-
 
 
     try:

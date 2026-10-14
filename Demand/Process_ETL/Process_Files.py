@@ -15,6 +15,7 @@ Contiene las siguientes funciones:
 #--------------------------------------------------
 # Liberia
 import pandas as pd
+import numpy as np
 
 # Permite buscar y recuperar una lista de nombres de archivos que coinciden con un patrón específico.
 import glob
@@ -57,7 +58,7 @@ def asign_country_code(df_consolidated, df_country):
 
 def asign_gpp(df_consolidated, df_gpp):
     """
-    Asigna GPP segun la clave compuesta 'fk_gpp' a cada registro.
+    Toma informacion dada por datalake y Asigna GPP segun la clave compuesta 'fk_gpp' a cada registro.
 
     Genera una clave temporal 'fk_gpp' concatenando códigos de división, categoría y portafolio 
     para realizar un cruce (merge) y traer dimensiones descriptivas.
@@ -90,7 +91,7 @@ def asign_gpp(df_consolidated, df_gpp):
 def asign_skuName(df_consolidated,df_skuName):
     """
     Asigna nombres de SKU y marcas al DataFrame consolidado mediante la clave 'fk_SKU'.
-
+    Esta informacion de nombre y brand es tomada del datalake.
     Limpia los nombres de las columnas, estandariza las llaves de unión y elimina 
     duplicados en la referencia antes de realizar un merge por la izquierda.
 
@@ -159,35 +160,83 @@ def process_columns(df_consolidated,lst_columns):
                 print(f"Error: La columna {e} no se encontró en los archivos. ")
     return df_processed
 
-def assign_local_currency(df_consolidated,df_fx_rate):
+def assign_FX_NSV_LC(df_consolidated,df_fx_rate):
      """
-        Convierte el Forecast de dólares a moneda local aplicando la tasa de cambio (OP Rate).
-
-        Crea una llave temporal de 'Año-Mes-País' para cruzar los datos consolidados con la 
-        tabla de FX Rates. Al final, limpia las columnas auxiliares y nos entrega el 
-        Forecast con el valor calculado en moneda local, asegurándose de que no queden 
-        valores vacíos (NaN) que rompan los cálculos.
+       Genera la variable (nsv_lc_cy/fx_cy)-(nsv_lc_py/fx_py)
      """
-
-     df_consolidated['fk_YearMonthCountry']=(df_consolidated['fk_year_month'] + '-' +
-                                                            df_consolidated['fk_Country'])
-     df_consolidated['fk_YearMonthCountry']=df_consolidated['fk_YearMonthCountry'].str.upper().str.strip()
-     df_fx_rate['fk_YearMonthCountry']=(df_fx_rate['Year']+'-'+
+     #LLAVE PARA OBTENER FX CY
+     df_consolidated['fk_YearMonthCountryCrncy']=(df_consolidated['fk_year_month'] + '-' +
+                                             df_consolidated['fk_Country']+'-'+
+                                             df_consolidated['CRNCY_KEY']                   )
+     df_consolidated['fk_YearMonthCountryCrncy']=df_consolidated['fk_YearMonthCountryCrncy'].str.upper().str.strip()
+     
+     #LLAVE PARA OBTNER FX PY
+     df_consolidated['fk_YearMonthCountryCrncy_PY'] = (
+        (df_consolidated['fk_year_month'].str[:4].astype(int) - 1).astype(str) 
+        + df_consolidated['fk_year_month'].str[4:] 
+        + '-' + df_consolidated['fk_Country'] 
+        + '-' + df_consolidated['CRNCY_KEY']
+     )
+     df_consolidated['fk_YearMonthCountryCrncy_PY']=df_consolidated['fk_YearMonthCountryCrncy_PY'].str.upper().str.strip()
+     
+     
+     #LLAVE FX
+     df_fx_rate['fk_YearMonthCountryCrncy']=(df_fx_rate['Year']+'-'+
                                         df_fx_rate['Month']+'-'+
-                                        df_fx_rate['Country'])
-     df_fx_rate['fk_YearMonthCountry']=df_fx_rate['fk_YearMonthCountry'].str.upper().str.strip()
+                                        df_fx_rate['Country']+'-'+
+                                        df_fx_rate['Currency'])
+     df_fx_rate['fk_YearMonthCountryCrncy']=df_fx_rate['fk_YearMonthCountryCrncy'].str.upper().str.strip()
+     
+     #CRUCE PARA OBTENER FX CY
      df_consolidated=pd.merge(
           df_consolidated,
-          df_fx_rate[['fk_YearMonthCountry','OP Rate']],
-          on='fk_YearMonthCountry',
+          df_fx_rate[['fk_YearMonthCountryCrncy','Adjusted Rate']],
+          on='fk_YearMonthCountryCrncy',
           how='left')
-     df_consolidated['OP Rate'] = df_consolidated['OP Rate'].fillna(0).astype('float32')
-     df_consolidated['FORECAST_VALUE_GSV'] = df_consolidated['FORECAST_VALUE_GSV'].fillna(0).astype('float32')
+     df_consolidated.rename(columns={'Adjusted Rate':'Adjusted Rate_CY'},inplace=True)
+     print('fx cy')
+     #CRUCE PARA OBTENER FX PY
+     df_consolidated = pd.merge(
+            df_consolidated,
+            df_fx_rate[['fk_YearMonthCountryCrncy', 'Adjusted Rate']],
+            left_on='fk_YearMonthCountryCrncy_PY',  
+            right_on='fk_YearMonthCountryCrncy',    
+            how='left'
+        )
+     print('fx py')
+     df_consolidated.rename(columns={'Adjusted Rate':'Adjusted Rate_PY'},inplace=True)
 
-     df_consolidated['Demand $ Local Currency']=df_consolidated['FORECAST_VALUE_GSV']*df_consolidated['OP Rate']
-     cols_to_drop = ['fk_YearMonthCountry','OP Rate']
+     df_consolidated['Adjusted Rate_PY'] = df_consolidated['Adjusted Rate_PY'].fillna(0).infer_objects(copy=False).astype('float32')
+     df_consolidated['Adjusted Rate_CY'] = df_consolidated['Adjusted Rate_CY'].fillna(0).infer_objects(copy=False).astype('float32')
+
+     print('ok')
+     df_consolidated['FORECAST_VALUE_GSV_LC'] = df_consolidated['FORECAST_VALUE_GSV_LC'].fillna(0).astype('float32')
+
+
+     df_consolidated['FX_NSV_LC']=(df_consolidated['FORECAST_VALUE_GSV_LC']/df_consolidated['Adjusted Rate_CY'])-(df_consolidated['FORECAST_VALUE_GSV_LC']/df_consolidated['Adjusted Rate_PY'])
+     print('ok sum')
+     cols_to_drop = ['fk_YearMonthCountryCrncy','fk_YearMonthCountryCrncy_PY']
      df_consolidated.drop(columns=[col for col in cols_to_drop if col in df_consolidated.columns], inplace=True)
      return df_consolidated    
+
+import numpy as np
+
+def sodimac(df_consolidated):
+    """Clasifica los registros según el grupo de demanda de Sodimac."""
+    
+    # 
+    lst_sodimac = {'ARSODIMAC', 'CHSODIMAC', 'COSODIMAC', 'PESODIMAC'}
+    
+    # Creamos la máscara booleana
+    mask_sodimac = df_consolidated['Demand Group'].isin(lst_sodimac)
+    
+    # Asignamos los valores sin modificar el DataFrame original por accidente
+    df_consolidated = df_consolidated.copy()
+    df_consolidated['Sodimac'] = np.where(mask_sodimac, 'Sodimac', 'Others')
+    
+    return df_consolidated
+
+
 
 def delete_parquet_files(folder_path: str):
 
@@ -230,4 +279,78 @@ def delete_parquet_files(folder_path: str):
         sys.exit(1)
 
 
-       
+    """
+    Calcula las Ventas Netas ajustadas por el factor 'Combo %' (asociado a NPI/promociones).
+    
+    El cruce se realiza a nivel de la clave compuesta: Año Fiscal, País y SKU.
+
+    Args:
+        df_processed (pd.DataFrame): DataFrame principal de ventas/demanda. Debe contener 
+                                     'fk_year_month', 'fk_Country', 'fk_SKU' y 'NSV'.
+        df_filter_npi (pd.DataFrame): Tabla de referencia NPI/Combo, conteniendo 
+                                      'fk_YearCountrySku' y 'Combo %'.
+
+    Returns:
+        pd.DataFrame: El DataFrame modificado con la columna calculada 
+                      'Net Sales NPI w/Combo'.
+    """
+    
+    #---RATES
+    df_fx_rate['Country']=df_fx_rate['Country'].str.lower().str.strip()
+    df_fx_rate['Country'] = df_fx_rate['Country'].replace({'brasil': 'brazil'})
+    
+    df_fx_rate['fk_YearMontsCountry']=df_fx_rate['Date'].astype(str).str[:6] + '-' + df_fx_rate['Country']
+    df_processed['fk_YearMontsCountry']=df_processed['fk_year_month']+'-'+df_processed['fk_Country']
+
+    df_fx_rate['fk_YearMontsCountry']=df_fx_rate['fk_YearMontsCountry'].str.lower().str.strip()
+    df_processed['fk_YearMontsCountry']=df_processed['fk_YearMontsCountry'].str.lower().str.strip()
+    df_fx_rate=df_fx_rate.drop_duplicates('fk_YearMontsCountry')
+
+    df_processed=pd.merge(
+         df_processed,
+         df_fx_rate[['fk_YearMontsCountry','OP Rate','Adjusted Rate']],
+         on='fk_YearMontsCountry',
+         how='left'
+    )
+    df_processed['OP Rate']=df_processed['OP Rate'].fillna('1')
+    df_processed['Adjusted Rate']=df_processed['Adjusted Rate'].fillna('1')
+
+    #--GToNET
+    df_gross_to_net['fk_YearMontsCountry_g2net']=df_gross_to_net['Date'].astype(str).str[:6]+'-'+df_gross_to_net['Country']
+    df_processed['fk_YearMontsCountry_g2net']=df_processed['fk_year_month']+'-'+df_processed['fk_Country'].str[:3]
+
+    df_gross_to_net['fk_YearMontsCountry_g2net']=df_gross_to_net['fk_YearMontsCountry_g2net'].str.lower().str.strip()
+    df_processed['fk_YearMontsCountry_g2net']=df_processed['fk_YearMontsCountry_g2net'].str.lower().str.strip()
+
+    df_gross_to_net=df_gross_to_net['fk_YearMontsCountry_g2net'].drop_duplicate('fk_YearMontsCountry_g2net')
+
+    df_processed=pd.merge(
+         df_processed,
+         df_gross_to_net[['fk_YearMontsCountry_g2net','G2N%']],
+         on='fk_YearMontsCountry_g2net',
+         how='left'
+    )
+
+
+
+    df_processed['fk_YearCountrySku']=df_processed['fk_YearCountrySku'].str.upper().str.strip()
+    df_filter_npi['fk_YearCountrySku']=df_filter_npi['fk_YearCountrySku'].str.upper().str.strip()
+    df_filter_npi = df_filter_npi.drop_duplicates(subset=['fk_YearCountrySku'])
+    df_processed=pd.merge(
+        df_processed,
+        df_filter_npi[['fk_YearCountrySku','Combo %']],
+        how='left',
+        left_on='fk_YearCountrySku',
+        right_on='fk_YearCountrySku'
+    )
+    df_processed['Combo %'] = pd.to_numeric(df_processed['Combo %'], errors='coerce')
+    df_processed['Combo %']=df_processed['Combo %'].fillna(1)
+    df_processed['Combo %']=df_processed['Combo %'].astype(float)
+    df_processed['NSV']=df_processed['NSV'].fillna(0)
+    df_processed['NSV']=df_processed['NSV'].astype(float)
+    df_processed['Net Sales NPI w/Combo']=df_processed['NSV']*df_processed['Combo %']
+    df_processed['Net Sales NPI w/Combo']=df_processed['Net Sales NPI w/Combo'].fillna(0)
+    cols_to_drop = ['fk_YearCountrySku','Combo %']
+    df_processed.drop(columns=[col for col in cols_to_drop if col in df_processed.columns], inplace=True)
+    return df_processed
+

@@ -30,7 +30,7 @@ fuentes externas debe incluirse allí para evitar duplicidad de marcas en el mod
 import pandas as pd
 import numpy as np
 import  sys
-from Master_Products.column_processing import  assign_proyects,assign_sub_brand
+from Master_Products.column_processing import  assign_proyects,assign_sub_brand,assing_st_top_categories
 from Fill_Rate.Process_ETL.Process_Files import clean_sku
 
 # mapa de estandarización de marcas 
@@ -50,8 +50,7 @@ BRAND_STANDARD_MAP = {
     "GRIDEST": ["GRIDEST", "GRYDEST"],
     "TROY-BILT": ["TROYBILT", "TROY-BILT"],
     "YARD MACHINES": ["YARDMACHINES", "YARDMACH"],
-    "GENUINE FACTORY PAR": ["GENUINEFACTORYPART", "GENUINEFACTORY", "GFPARTS"],
-    "OTHER": ["OTHERS", "OTHERBRAND", "OTRA","OTH", "OTHER"],
+    "OTHER": ["OTHERS", "OTHERBRAND", "OTRA","OTH", "OTHER","GENUINEFACTORYPART", "GENUINEFACTORY", "GFPARTS"],
     "SAT (SSS)": ["SAT", "SSS", "SATSSS"],
     "CUB CADET": ["CUB CADET", "CUBCADET"],
     "DELTA": ["DELTA", "DELTAPOWER"],
@@ -168,11 +167,11 @@ def update_master_data(df_final: pd.DataFrame, df_source: pd.DataFrame, join_key
         df_source (pd.DataFrame): El DataFrame fuente con los datos a usar.
         join_key (str): Columna clave para indexar la actualización.
         update_columns (list): Lista de columnas a actualizar.
-    
+
+        
 
     Returns: pd.DataFrame: El DataFrame destino con los valores actualizados.
     """
-    
     # Solo seleccionamos las columnas necesarias del DF de origen
     # 1. Limpiar duplicados en la fuente para asegurar mapeo 1 a 1
     df_src_clean = df_source.drop_duplicates(subset=[join_key])
@@ -203,6 +202,43 @@ def assign_seed_type(df):
     
     return df
 
+
+def assing_brand(df_final_update,df_brand):
+        # Crear el mapa inverso 
+        brand_map_inverse = create_inverse_brand_map(BRAND_STANDARD_MAP)
+        print('create inverse brand map')
+        #  Normalizar y mapear Brand (vectorizado y rápido)
+        df_final_update['Brand_Normalized'] = df_final_update['Brand'].str.upper().str.strip().str.replace(' ', '')
+        df_final_update['Brand'] = df_final_update['Brand_Normalized'].map(brand_map_inverse).fillna(df_final_update['Brand'])
+        df_final_update = df_final_update.drop(columns=['Brand_Normalized'])
+
+        # ASIGNACION DE BRAND GROUP (actualiza df_brand)
+        # Usamos merge en lugar de update porque 'Brand' tiene duplicados en df_final
+        if 'Brand Group' in df_final_update.columns:
+            df_final_update = df_final_update.drop(columns=['Brand Group'])
+
+        df_final_update['Brand']=df_final_update['Brand'].str.upper().str.strip().str.replace(' ', '')
+        df_brand['Brand'] = df_brand['Brand'].str.upper().str.strip().str.replace(' ', '')
+        df_final_update = pd.merge(df_final_update, df_brand[['Brand', 'Brand Group']].drop_duplicates('Brand'), on='Brand', how='left')
+        df_final_update['Brand'] = df_final_update['Brand'].replace({'BLACK+DECKER':'BLACK + DECKER',
+                                                       'CUBCADET':'CUB CADET',
+                                                       'PORTERCABLE':'PORTER CABLE',
+                                                       'IAREXPERT':'IAR EXPERT',
+                                                       'YARDMACHINES':'YARD MACHINES',
+                                                       'GENUINEFACTORYPARTS':'GENUINE FACTORY PARTS',
+                                                       'SAT(SSS)':'SAT (SSS)',
+                                                       'TRIMMERPLUS':'TRIMMER PLUS',
+                                                       'MACTOOLS':'MAC TOOLS'})
+        print('update master brand')
+        #  Columna calculada
+        df_final_update['Brand + SBU'] = df_final_update['Brand'] + '-' + df_final_update['SBU Type']
+        print('brand+sbu')
+        #  Asigno sub-brand
+        df_final_update['Sub-Brand'] = df_final_update.apply(
+        lambda row: assign_sub_brand(row['SKU'], row['SKU Description'], row['Brand']), axis=1)
+        print('sub brand')   
+
+        return df_final_update 
 
 def main():
     """	
@@ -243,8 +279,11 @@ def main():
             'Categoria HTS', 'Familia HTS', 'Sub Familia HTS', 'Clase HTS',
             'NPI Project HTS', 'Posicionamiento HTS', 'Project Name',
             #Archivo compartido con los sku
-            'Dewalt XR','Dewalt Industrial',
-            'B+D Power Connect 20V',
+            'Dewalt XR','DW Ind/HvyInd','DeWalt P&P',
+            'Power Connect', 'B+D Power Connect 20V',
+
+            #st top  categories
+            'ST Top Categories',
 
             'SKU Type','Seed Type','Link']
         
@@ -267,11 +306,12 @@ def main():
         df_hts = pd.read_excel(path_hts, dtype=str, engine='openpyxl')
         df_pwt = pd.read_excel(path_pwt, dtype=str, engine='openpyxl')
         df_brand = pd.read_excel(path_brand_gpp, sheet_name='Brand', dtype=str, engine='openpyxl')
-        df_gpp = pd.read_excel(path_brand_gpp, sheet_name='GPP', dtype=str, engine='openpyxl')
+        df_gpp = pd.read_excel(path_brand_gpp, sheet_name='GPP', dtype=str, engine='openpyxl',keep_default_na=False)
         df_proyects=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='Proyects')
         df_dewaltXR=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='DW_XR')
         df_dw_ind=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='Dewalt Indust_Type')
-    
+        df_dw_pyp=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='DeWalt P&P')    
+        df_powerconnect=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='PowerConnect')
 
 
         #-------------------------------
@@ -283,96 +323,78 @@ def main():
         df_proyects = clean_sku(df_proyects, 'SKU').drop_duplicates(subset=['SKU'])
         df_dewaltXR = clean_sku(df_dewaltXR, 'SKU').drop_duplicates(subset=['SKU'])
         df_dw_ind = clean_sku(df_dw_ind, 'SKU').drop_duplicates(subset=['SKU'])
+        df_dw_pyp = clean_sku(df_dw_pyp, 'SKU').drop_duplicates(subset=['SKU'])
         df_gpp = clean_sku(df_gpp, 'GPP').drop_duplicates(subset=['GPP'])
 
 
        
         # ---  PROCESO ETL CENTRAL ---
         
-        #  Actualizar/Agregar SKUs base (solo las columnas lst_colums_by_refresh)
-        df_final = update_master_products(path_md_product, path_sku_review, lst_col_md_product, lst_colums_by_refresh)
-        df_final = clean_sku(df_final, 'SKU')
-        df_final=df_final.drop_duplicates(subset=['SKU'])
+        # ================================
+        # ACTUALIZACIÓN SKUs
+        # ================================
+            
+        #  Actualizar/Agregar SKUs provenientes de SKU REVIEW (solo las columnas lst_colums_by_refresh)
+        df_update_md = update_master_products(path_md_product, path_sku_review, lst_col_md_product, lst_colums_by_refresh)
+        df_update_md = clean_sku(df_update_md, 'SKU')
+        df_update_md=df_update_md.drop_duplicates(subset=['SKU'])
+        print('update master products with SKU REVIEW')
+        print('info previa tomar info hts')
+        #print(df_update_md[df_update_md['SKU'] == 'STHT0-77363']['Posicionamiento HTS'])
 
-        print('update master products')
-
-        df_final=update_master_data(df_final,df_gpp,'GPP',lst_col_gpp)
-        print('update master gpp')
-       
-        #  TRATAMIENTO DE BRAND Y ASIGNACIÓN DE BRAND GROUP
-        
-        # Crear el mapa inverso solo una vez
-        brand_map_inverse = create_inverse_brand_map(BRAND_STANDARD_MAP)
-        print('create inverse brand map')
-        #  Normalizar y mapear Brand (vectorizado y rápido)
-        df_final['Brand_Normalized'] = df_final['Brand'].str.upper().str.strip().str.replace(' ', '')
-        df_final['Brand'] = df_final['Brand_Normalized'].map(brand_map_inverse).fillna(df_final['Brand'])
-        df_final = df_final.drop(columns=['Brand_Normalized'])
-
-        # ASIGNACION DE BRAND GROUP (actualiza df_brand)
-        # Usamos merge en lugar de update porque 'Brand' tiene duplicados en df_final
-        if 'Brand Group' in df_final.columns:
-            df_final = df_final.drop(columns=['Brand Group'])
-
-        df_final['Brand']=df_final['Brand'].str.upper().str.strip().str.replace(' ', '')
-        df_brand['Brand'] = df_brand['Brand'].str.upper().str.strip().str.replace(' ', '')
-        df_final = pd.merge(df_final, df_brand[['Brand', 'Brand Group']].drop_duplicates('Brand'), on='Brand', how='left')
-        df_final['Brand'] = df_final['Brand'].replace('BLACK+DECKER', 'BLACK + DECKER')
-        print('update master brand')
-        #  Columna calculada
-        df_final['Brand + SBU'] = df_final['Brand'] + '-' + df_final['SBU Type']
-        
-        #  Asigno sub-brand
-        df_final['Sub-Brand'] = df_final.apply(
-        lambda row: assign_sub_brand(row['SKU'], row['SKU Description'], row['Brand']), axis=1)
-
-
-
-        # --- CATEGORY GROUP, BIG ROCK, TOP CATEGORY (actualiza df_gpp por 'GPP')
-        # --- Actualizo la notacion de GPP para que complete espacios para GPP= N/A-N/A-N/A
-        lst_columns_gpp_cat=['GPP SBU','GPP SBU Description','SBU Type',
-                             'GPP Division Code','GPP Division Description', 
-                             'GPP Category Code','GPP Category Description',
-                             'GPP Portfolio Code','GPP Portfolio Description',
-                             'Category Group','Big Rock']
-        df_gpp['GPP_Key'] = df_gpp['GPP'].str.upper().str.strip().str.replace(' ', '')
-        df_gpp = df_gpp.drop(columns=['GPP'])
-
-        df_final['GPP_Key'] = df_final['GPP'].str.upper().str.strip().str.replace(' ', '')
-        # Actualizo las columnas de clasificacion con base en su GPP
-        df_final = update_master_data(df_final, df_gpp, 'GPP_Key', lst_columns_gpp_cat)
-        print('update master gpp')
-        df_final = df_final.drop(columns=['GPP_Key'])
-       
-
-         #  Agregar info HTS
-         #completa los nulos en 'Big Rock', 'Top Category' con info de jorge
-        lst_columns_hts=['Big Rock', 'Category Group', 'Categoria HTS', 'Familia HTS',
-                        'Sub Familia HTS', 'Clase HTS', 'NPI Project HTS', 'Posicionamiento HTS']
-        df_final = update_master_data(df_final, df_hts, COL_KEY, lst_columns_hts)
-        print('update master hts')
-        #  Agregar info PWT
-        lst_columns_pwt=['Group 1','Group 2']
-        df_final = update_master_data(df_final, df_pwt, COL_KEY, lst_columns_pwt)
-        print('update master pwt') 
+        #asigno/actualizo big rock y category group, segun GPP 
+        lst_col_bigrock_category=['Category Group','Big Rock']
+        df_update_bigrock_cateoryGroup = update_master_data(df_update_md, df_gpp, 'GPP', lst_col_bigrock_category)
 
 
         #Asigno nombre de proyectos
-        df_md_products_updated= assign_proyects(df_final, df_proyects, df_dewaltXR, df_dw_ind)
+        df_assign_proyects= assign_proyects(df_update_bigrock_cateoryGroup, df_proyects, df_dewaltXR, df_dw_ind,df_dw_pyp,df_powerconnect)
+
+        
+         #------  Agregar info HTS 
+         #completa los nulos en 'Big Rock', 'Top Category' con info de jorge
+        lst_columns_hts=[ 'SKU Base', 'SKU Description', 'Brand','Big Rock', 'Category Group', 'Categoria HTS', 'Familia HTS',
+                        'Sub Familia HTS', 'Clase HTS', 'NPI Project HTS', 'Posicionamiento HTS']
+        df_update_hts = update_master_data(df_assign_proyects, df_hts, COL_KEY, lst_columns_hts)
+        print('update master hts')
+        #print(df_update_hts[df_update_hts['SKU'] == 'STHT0-77363']['Posicionamiento HTS'])
+
+
+        # ----  Agregar info PWT
+        lst_columns_pwt=['Corded / Cordless','Batteries Qty', 'Dewalt XR','DW Ind/HvyInd','Group 1','Group 2']
+        #df_update_pwt = update_master_data(df_update_hts, df_pwt, COL_KEY, lst_columns_pwt)
+        print('update master pwt') 
+
+        #----- Agregar info ST TOP CATEGORIES
+        #df_st_top_categories=assing_st_top_categories(df_update_pwt)
+        df_st_top_categories=assing_st_top_categories(df_update_hts)
+
+        # ---- Completo info para GPP ='-'        
+        df_st_top_categories['GPP']=df_st_top_categories['GPP'].fillna('N/A-N/A-N/A-N/A')
+        df_final_update=update_master_data(df_st_top_categories,df_gpp,'GPP',[col for col in lst_col_gpp if col != 'GPP'])
+        print('update master gpp')
+
+
+        #---  TRATAMIENTO DE BRAND Y ASIGNACIÓN DE BRAND GROUP
+        df_final_update=assing_brand(df_final_update,df_brand)
 
         #Asigno Seed Type
-        df_md_products_updated=assign_seed_type(df_md_products_updated)
-
+        df_final_update=assign_seed_type(df_final_update)
+        print('seed type')
         #Selecciono y ordeno las columnas que finalmente compornen el md products
-        df_md_products_updated =df_md_products_updated[lst_col_md_product]
-
+        df_md_products_updated =df_final_update[lst_col_md_product]
+        print('orden columnas')
         # Ordeno md products
-        df_md_products_updated=df_md_products_updated.sort_values(by=['GPP','SKU Base','SKU','Brand','SKU Description'])
+        df_md_products_updated=df_md_products_updated.sort_values(by=['SKU','SKU Base','GPP','Brand','SKU Description'])
+        print('sort')
         df_md_products_updated.drop_duplicates(subset=['SKU'], inplace=True)
-
+        print('drop duplicate')
 
         # ---EXPORTACIÓN ---
+        #ruta=r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Data\Processed-Dataflow\Master_Products\prueba.xlsx'
         df_md_products_updated.to_excel(path_md_product, index=False)
+        #df_md_products_updated.to_excel(ruta, index=False)
+                
         print("Proceso de actualización de productos completado exitosamente.")
         pass
     except Exception as e:

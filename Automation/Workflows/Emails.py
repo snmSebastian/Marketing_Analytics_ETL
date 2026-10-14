@@ -89,15 +89,19 @@ def correo(destinatarios: list[str], subject: str, body: str):
         mail = outlook.CreateItem(0)
         
         # Unir todos los destinatarios en una sola cadena (más eficiente)
-        mail.To = "; ".join(destinatarios)
+        #mail.To = "; ".join(destinatarios)
         mail.Subject = subject
-        
+
         # Usamos HTMLBody para manejar mejor los saltos de línea y formateo
         # Aquí es donde el Body de tu reporte ETL se verá bien.
         mail.HTMLBody = body 
-        
+        for destinatario in destinatarios:
+            if destinatario.strip():  # Evita cadenas vacías
+                recipiente = mail.Recipients.Add(destinatario.strip())
+                recipiente.Type = 1  # 1 significa 'To' (Para), 2 sería 'CC'
+
         mail.Send()
-        print(f"Correo enviado a: {mail.To}")
+        print(f"Correo enviado a: {len(destinatarios)} destinatarios")
         time.sleep(15) # El time.sleep(10) es opcional, puede ser útil si los procesos son muy rápidos y Outlook necesita tiempo.    
     finally:
         # 💡 LIBERACIÓN EXPLÍCITA Y ROBUSTA (Tu código, que es correcto)

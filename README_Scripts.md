@@ -144,3 +144,81 @@ pip install -r requirements.txt
 python scripts/Master_Products/Update_md_products.py
 ```
 (Asegúrate de que los archivos de entrada requeridos existan en la ruta de red configurada antes de ejecutar.)
+
+# 🚀 Gestión del Proyecto con Poetry
+
+Este proyecto utiliza **Poetry** para la gestión de dependencias y entornos virtuales en lugar de los archivos tradicionales `requirements.txt`. Esto garantiza que todas las librerías de Ciencia de Datos, Automatización y Machine Learning (`scikit-learn`, `skforecast`, `statsmodels`, `scrapy`, `pywin32`, etc.) sean 100% compatibles entre sí y no generen conflictos de versiones.
+
+---
+
+## 📓 Guía Rápida (Tu Día a Día)
+
+> ⚠️ **Regla de oro:** Ejecuta siempre estos comandos parado dentro de tu carpeta central de trabajo:  
+> `C:\Users\SSN0609\...\Analytics_Workspace\Scripts`
+
+### 1. Iniciar a Trabajar (Activar Entorno)
+Ejecuta esto cada vez que abras una terminal nueva en Visual Studio Code para enlazar tus librerías:
+
+```powershell
+# Opción Directa de Windows (Recomendada y más rápida):
+.\.venv\Scripts\Activate.ps1
+
+# Opción Oficial de Poetry:
+Invoke-Expression (& C:\Users\SSN0609\AppData\Roaming\Python\Scripts\poetry env activate)
+```
+*💡 Sabrás que funcionó porque verás el indicador `(scripts-py3.12)` o `(.venv)` al inicio de la línea de comandos.*
+
+### 2. Ejecutar tus Códigos
+Con el entorno activado (viendo los paréntesis en la terminal), ejecuta tus módulos y scripts analíticos exactamente igual que siempre:
+
+```powershell
+python -m Master_Products.Update_File_HTS
+```
+
+### 3. Instalar Nuevas Librerías
+*Olvídate de `pip install` y de modificar archivos a mano.* Puedes añadir librerías estando dentro del entorno virtual. Usa la ruta directa de Poetry para que valide la compatibilidad e inyecte el paquete automáticamente:
+
+```powershell
+# Para librerías del código (ej. openpyxl)
+& C:\Users\SSN0609\AppData\Roaming\Python\Scripts\poetry add openpyxl
+
+# Para herramientas de desarrollo que solo usas tú (ej. Jupyter)
+& C:\Users\SSN0609\AppData\Roaming\Python\Scripts\poetry add ipykernel --group dev
+```
+
+### 4. Eliminar Librerías
+Si dejas de usar un paquete, este comando lo remueve limpiamente de tu entorno físico y de los archivos de configuración:
+
+```powershell
+& C:\Users\SSN0609\AppData\Roaming\Python\Scripts\poetry remove nombre_libreria
+```
+
+### 5. Salir del Entorno Virtual
+Cuando termines tus tareas y quieras apagar el entorno virtual en esa pestaña de la terminal:
+
+```powershell
+exit
+```
+
+---
+
+## ⚙️ Comandos de Mantenimiento y Despliegue
+
+### Reconstruir el proyecto desde cero
+Si clonas el repositorio en otra computadora o borras accidentalmente la carpeta `.venv`, este comando lee el archivo de bloqueo e instala exactamente las mismas versiones del equipo:
+```powershell
+& C:\Users\SSN0609\AppData\Roaming\Python\Scripts\poetry install
+```
+
+### Sincronización Estricta (Limpiar basura)
+Si cambias de rama en Git o eliminas dependencias y quieres borrar inmediatamente cualquier librería vieja o huérfana de tu carpeta `.venv`:
+```powershell
+& C:\Users\SSN0609\AppData\Roaming\Python\Scripts\poetry install --sync
+```
+
+---
+
+## 📄 Archivos Clave de Configuración (No los edites a mano)
+
+*   **`pyproject.toml`**: Contiene la lista general de librerías comerciales y la versión de Python requerida (`>=3.12,!=3.14.1`). Tiene configurado el parámetro `package-mode = false` para trabajar como repositorio de scripts.
+*   **`poetry.lock`**: El archivo más importante del sistema. Bloquea las versiones exactas bit por bit (incluyendo subdependencias). **Debe subirse siempre al repositorio Git de la empresa.**

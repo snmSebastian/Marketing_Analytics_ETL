@@ -35,7 +35,7 @@ from pathlib import Path
 # La importación debe ser relativa al paquete actual.
 from Fill_Rate.Process_ETL.Process_Files import  group_parquet,format_columns,clean_sku
 from Sales.Process_ETL.Process_Files import (process_columns_sales,assign_nsv,assign_selling_unit_price,assign_NPI_New_Carryover,
-                                             LaunchYear_VR,assign_num_batteries, assign_NSV_NPI_w_Combo)
+                                             LaunchYear_VR,assign_num_batteries, assign_NSV_NPI_w_Combo,sodimac)
 
 
 def read_files_parquets(input_path):
@@ -97,13 +97,14 @@ def main():
     print("=" * 55)
     try:
         # --- CONFIGURACIÓN DE RUTAS ---
-        from config_paths import SalesPaths       
+        from config_paths import SalesPaths,MasterCustomersPaths       
         sales_update_raw_dir = SalesPaths.INPUT_RAW_UPDATE_DIR
         country_code_file = SalesPaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
         processed_gross_to_net=SalesPaths.INPUT_PROCESSED_GROSS_TO_NET_FILE
         npi=SalesPaths.INPUT_PROCESSED_NPI_FILE
         md_product_processed_file=SalesPaths.INPUT_PROCESSED_MASTER_PRODUCTS_FILE
-        
+
+        md_customers=MasterCustomersPaths.OUTPUT_FILE_PROCESSED_MASTER_CUSTOMERS_FILE
         #sales_historic_processed_dir =SalesPaths.OUTPUT_PROCESSED_PARQUETS_DIR_PRUEBA
         sales_historic_processed_dir =SalesPaths.OUTPUT_PROCESSED_PARQUETS_DIR
         #===============================
@@ -111,14 +112,16 @@ def main():
         #===============================
         df_update = read_files_parquets(sales_update_raw_dir)
         
-        df_country = pd.read_excel(country_code_file, sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+        df_country = pd.read_excel(country_code_file, sheet_name='Region', dtype=str, engine='openpyxl')
         
         df_md_product=pd.read_excel(md_product_processed_file,dtype=str, engine='openpyxl')
         df_gross_to_net=pd.read_excel(processed_gross_to_net,dtype=str, engine='openpyxl')
         # Asegurar que npi se lea correctamente según los nombres de las pestañas
-        df_npi=pd.read_excel(npi,dtype=str,sheet_name='Database', engine='openpyxl')
+        df_npi=pd.read_excel(npi,sheet_name='Database',dtype=str, engine='openpyxl')
+
         df_filter_npi=pd.read_excel(npi,sheet_name='NPI Concat', dtype=str, engine='openpyxl')
-       
+        df_customers=pd.read_excel(md_customers,dtype=str, engine='openpyxl')
+        print('read listo')
         #----------------------
         #----- LIMPIEZA SKU
         #----------------------
@@ -126,10 +129,10 @@ def main():
         df_md_product=clean_sku(df_md_product,'SKU')
         df_npi=clean_sku(df_npi,'SKU')
         df_filter_npi=clean_sku(df_filter_npi,'SKU')
-        
+        print('clean')
         # Elimina duplicados
         df_md_product.drop_duplicates(subset=['SKU'], keep='first', inplace=True)
-
+        print('delete duplicados')
         len_init = len(df_update)
         suma_init=df_update["Total Sales"].astype(float).sum()
 
@@ -138,12 +141,10 @@ def main():
         #=========================================================
         # Definir las columnas relevantes para el procesamiento. 
 
-        lst_columns = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','fk_Country','Country Detail',
+        lst_columns = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','Region Consolidated','fk_Country','Country Detail',
                        'Sales Type', 'Sales Type Detail','Sales Type Invoince Country',
-                       'fk_Sold_To_Customer_Code','fk_SKU',
-                       'Total Sales', 'Total Cost', 'Units Sold','Units Return','NSV','FX Rate NSV','fx_nsv_financial','Outbound',
-                       'fk_date_country_customer_clasification'
-                      ]
+                       'fk_Sold_To_Customer_Code','Customer Name','fk_SKU',
+                       'Total Sales', 'Total Cost', 'Units Sold','Units Return','NSV','FX Rate NSV','fx_nsv_financial','Outbound','GSV Local']
 
         if df_update is None or df_update.empty:
             print("No hay archivos para actualizar. Finalizando proceso.")
@@ -161,6 +162,7 @@ def main():
         df_update=assign_NPI_New_Carryover(df_update,df_npi,df_country)
         print(f'{len(df_update)}')
         print(f'{df_update['Total Sales'].astype(float).sum()}')
+
         print( "assing npi")
         df_update=LaunchYear_VR(df_update,df_npi,df_country)
         print( "assing launch year")
@@ -174,23 +176,28 @@ def main():
         print( "assing npi w combo")
         print(f'{df_update['Total Sales'].astype(float).sum()}')
         print(f'{len(df_update)}')
-        
+
+        df_update=sodimac(df_update,df_customers)
+        print('sodimac')    
+        print(f'{df_update['Total Sales'].astype(float).sum()}')
+        print(f'{len(df_update)}')
+    
+
         #====================================
         # --- Formato de columnas ---
         #====================================
-        lst_columns_srt = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','fk_Country','Country Detail',
+        lst_columns_srt = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','Region Consolidated','fk_Country','Country Detail',
                           'Sales Type', 'Sales Type Detail','Sales Type Invoince Country',
-                          'fk_Sold_To_Customer_Code', 'fk_SKU',
-                          'fk_date_country_customer_clasification',
+                          'fk_Sold_To_Customer_Code', 'Customer Name','fk_SKU',
                           'New New/Carryover',
-                          'VR %','Launch Year']
+                          'VR %','Launch Year','Sodimac']
         lst_columns_float = ['Total Sales', 'Total Cost', 'Units Sold','Units Return','NSV','FX Rate NSV',
                             'Selling Unit Price',
                             'NPI Incremental Sales $',
                             'Num Batteries Sales',
                             'Net Sales NPI w/Combo',
                             'fx_nsv_financial',
-                            'Outbound']
+                            'Outbound','GSV Local']
         
         df_final=format_columns(df_update,lst_columns_srt,lst_columns_float)
         

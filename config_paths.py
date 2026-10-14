@@ -42,7 +42,8 @@ PATHS_CONFIG = {
             "Mothly_Update": RAW_DATA_DIR / 'Demand' / 'Mothly_Update'
         },
         "Processed": {
-            "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Demand'
+            "OUTPUT_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Demand',
+            "OUTPUT_SNAPSHOP_DIR_PROCESSED_PARQUETS": PROCESSED_DATAFLOW_DIR / 'Demand_Snapshop'
             }
     },
     
@@ -97,13 +98,16 @@ PATHS_CONFIG = {
             "SkuName": RAW_DATA_DIR / 'Products' / 'other' /'QuerySkuName.parquet',
             "ConsultaSKU": RAW_DATA_DIR / 'Products' / 'other' /'ConsultaSKU.xlsx',
             "Result_ConsultaSku":RAW_DATA_DIR / 'Products' / 'other' /'ResultConsultSku.xlsx',
+            "Proyects":  RAW_DATA_DIR / 'Products' / 'working_files_for_pwt_hts_products'/ 'Proyects.xlsx',
+            "Trades_Dewalt":RAW_DATA_DIR / 'Products' /'Trades'/'Trades Dewalt.xlsx',
+            "Trades_Stanley":RAW_DATA_DIR / 'Products' /'Trades'/'Trades Stanley.xlsx'
+
                 
         },
         "Processed": {
             "GPP_Brand": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'GPP-Brand.xlsx',
             "Master_Product": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'Master_Product.xlsx',
-            "Proyects": PROCESSED_DATAFLOW_DIR / 'Master_Products' / 'Proyects.xlsx'
-            
+            "TradesDw":PROCESSED_DATAFLOW_DIR/'Master_Products'/'Trades'/'TradesDewalt.xlsx'            
         }
     },
     "Sodimac": {
@@ -119,9 +123,9 @@ PATHS_CONFIG = {
             "Week_update_Chile":RAW_DATA_DIR/'Datamind'/'Update_Week_Datamind'/'Actualizacion Chile Semanal.xlsx',
             "Week_update_Mexico":RAW_DATA_DIR/'Datamind'/'Update_Week_Datamind'/'Actualizacion Mexico Semanal.xlsx',
             "Precios_Coppel":RAW_DATA_DIR/'Datamind'/'Coppel'/'Precios_Coppel.xlsx',
-            "Mercado_Libre_Sales":r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Mercado Libre\Analytics LAG ONE TEAM - Meli_No_Seller_Data_V2/meli_sbd_202601_lastweek.xlsx',
-            "Mercado_Libre_Sku":r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Mercado Libre\Analytics LAG ONE TEAM - Meli_SKU_Clean/Meli_SKU_Clean_V2.xlsx',
-            "EDAS":RAW_DATA_DIR/'Datamind'/'EDAS'/'QueryEDAS.parquet'
+            "Mercado_Libre_Sku":RAW_DATA_DIR/'Datamind'/'Mercado Libre'/'SKU Clean'/'Meli_SKU_Clean_V2.xlsx',
+            "Mercado_Libre_Sales":  RAW_DATA_DIR/'Datamind'/'Mercado Libre'/'Sales',
+            "EDAS":RAW_DATA_DIR/'Datamind'/'EDAS'/'QueryEDAS.parquet',
         },
         "Processed":{
             "OUTPUT_DIR_PROCESSED_PARQUETS_DATAMIND": PROCESSED_DATAFLOW_DIR / 'Datamind'
@@ -134,6 +138,11 @@ PATHS_CONFIG = {
             "OUTPUT_FILE_PROCESSED_EXCEL_CAMPAIGNS": PROCESSED_DATAFLOW_DIR / 'Campaigns'/'Campaigns SBD.xlsx',
             "OUTPUT_FILE_PROCESSED_EXCEL_SOV": PROCESSED_DATAFLOW_DIR / 'Campaigns'/'SOV.xlsx',
             "OUTPUT_FILE_PROCESSED_EXCEL_ANALYSIS_CAMPAIGNS": PROCESSED_DATAFLOW_DIR / 'Campaigns'/'Analysis Campaigns.xlsx'
+        }
+    },
+    "Display Seedings":{
+        "Processed":{
+            "OUTPUT_FILE_PROCCESED_EXCEL_DISPLAY":PROCESSED_DATAFLOW_DIR/'Display Seedings'/'Display Seedings.xlsx'
         }
     }
 }
@@ -162,6 +171,7 @@ class DemandPaths:
     # --- OUTPUTS ------
     #___________________
     OUTPUT_PROCESSED_PARQUETS_DIR: Path = PATHS_CONFIG['Demand']['Processed']['OUTPUT_DIR_PROCESSED_PARQUETS']
+    OUTPUT_SNAPSHOP_PROCESSED_PARQUETS_DIR: Path = PATHS_CONFIG['Demand']['Processed']['OUTPUT_SNAPSHOP_DIR_PROCESSED_PARQUETS']
     
 DEMAND_PATHS = DemandPaths()
 
@@ -249,7 +259,9 @@ class MasterProductsPaths:
     INPUT_RAW_Result_ConsultaSKU_FILE: Path = PATHS_CONFIG['Master_Products']['Raw']['Result_ConsultaSku']
     
     INPUT_PROCESSED_GPP_BRAND_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['GPP_Brand']
-    INPUT_PROCESSED_PROYECTS_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['Proyects']
+    INPUT_PROCESSED_PROYECTS_FILE: Path = PATHS_CONFIG['Master_Products']['Raw']['Proyects']
+    INPUT_PROCESSED_TRADES_DW_FILE:Path=PATHS_CONFIG['Master_Products']['Raw']['Trades_Dewalt']
+    INPUT_PROCESSED_TRADES_ST_FILE:Path=PATHS_CONFIG['Master_Products']['Raw']['Trades_Stanley']
 
     #___________________
     # --- OUTPUTS -------
@@ -260,7 +272,7 @@ class MasterProductsPaths:
     WORKFILE_PWT_FILE:Path=PATHS_CONFIG['Master_Products']['Raw']['pwt_products']
 
     OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE: Path = PATHS_CONFIG['Master_Products']['Processed']['Master_Product']
-    
+    OUTPUT_PROCESSED_TRADES_DEWALT_FILE:Path=PATHS_CONFIG['Master_Products']['Processed']['TradesDw']
     
 MASTER_PRODUCTS_PATHS = MasterProductsPaths()
 
@@ -283,10 +295,15 @@ class DatamindPaths:
     INPUT_RAW_ARGENTINA_FILE: Path = PATHS_CONFIG['Datamind']['Raw']['Week_update_Argentina']
     INPUT_RAW_MEXICO_FILE: Path = PATHS_CONFIG['Datamind']['Raw']['Week_update_Mexico']
     INPUT_RAW_CHILE_FILE: Path = PATHS_CONFIG['Datamind']['Raw']['Week_update_Chile']
+
     INPUT_RAW_COPPEL_FILE: Path = PATHS_CONFIG['Datamind']['Raw']['Precios_Coppel']
+
     INPUT_RAW_MELI_SALES_FILE: Path = PATHS_CONFIG['Datamind']['Raw']['Mercado_Libre_Sales']
     INPUT_RAW_MELI_SKU_FILE: Path = PATHS_CONFIG['Datamind']['Raw']['Mercado_Libre_Sku']
+
     INPUT_PROCESSED_GROSS_TO_NET_FILE: Path = PATHS_CONFIG['Shared']['Gross_to_Net']
+    INPUT_PROCESSED_FX_RATE_FILE:Path=PATHS_CONFIG['Shared']['fx_rate']
+
     INPUT_RAW_SkuName_FILE: Path = PATHS_CONFIG['Master_Products']['Raw']['SkuName']
     INPUT_RAW_EDAS_FILE: Path = PATHS_CONFIG['Datamind']['Raw']['EDAS']
 
@@ -306,3 +323,12 @@ class CampaignsPaths:
     OUTPUT_FILE_PROCESSED_EXCEL_ANALYSIS_CAMPAIGNS: Path = PATHS_CONFIG['Campaigns']['Processed']['OUTPUT_FILE_PROCESSED_EXCEL_ANALYSIS_CAMPAIGNS']
 
 Campaigns_PATHS = CampaignsPaths()
+
+
+class DisplayPaths:
+#_________________
+    #--- OUTPUTS --
+    #________________
+    OUTPUT_PROCCESED_EXCEL_FILE=PATHS_CONFIG['Display Seedings']['Processed']['OUTPUT_FILE_PROCCESED_EXCEL_DISPLAY']    
+
+Datamind_PATHS=DisplayPaths()

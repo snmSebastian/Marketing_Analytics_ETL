@@ -239,7 +239,22 @@ def assign_NPI_New_Carryover(df_processed,df_npi,df_country):
         pd.DataFrame: El DataFrame modificado con las columnas 'New New/Carryover', 
                       'Incremental %', y 'NPI Incremental Sales $'.
     """
+
+
+
     df_processed=assing_region(df_country,df_processed)
+    # 1. Obtener un nuevo DataFrame con las combinaciones únicas
+    combinaciones_unicas = df_processed[['Region', 'fk_Country']].drop_duplicates()
+
+
+    # 2. Si necesitas mantenerlo estrictamente como un conjunto (set) de tuplas:
+    country = set(map(tuple, combinaciones_unicas.values))
+    print(country)
+
+
+
+
+
     # llave para cruzar ventas con npi
     df_processed['fk_NPI'] = (df_processed['fk_year_month'].astype(str) + '-'+
                              df_processed['Region'] + '-'+
@@ -274,6 +289,7 @@ def assign_NPI_New_Carryover(df_processed,df_npi,df_country):
     df_processed['Incremental %'] = df_processed['Incremental %'].astype(float)
     df_processed['NPI Incremental Sales $']=df_processed['NSV']*df_processed['Incremental %']
     cols_to_drop = ['fk_YearMonthRegionySku','Incremental %','fk_NPI','Country','Region']
+   
     df_processed.drop(columns=[col for col in cols_to_drop if col in df_processed.columns], inplace=True)
     
     return df_processed
@@ -460,3 +476,29 @@ def assign_fk_YearRegionSku(df_processed, df_country):
     df_processed.drop(columns=['Region'], inplace=True)
 
     return df_processed
+
+def sodimac(df_processed,df_customers):
+     df_processed['fk_Sold_To_Customer_Code']=df_processed['fk_Sold_To_Customer_Code'].astype(str).str.lower().str.strip()
+     df_customers['fk_Sold-To Customer Code']=df_customers['fk_Sold-To Customer Code'].astype(str).str.lower().str.strip()
+     df_customers=df_customers.drop_duplicates('fk_Sold-To Customer Code')
+
+     df_processed=pd.merge(
+          df_processed,
+          df_customers[['fk_Sold-To Customer Code','Sold-To Customer Name']],
+          left_on='fk_Sold_To_Customer_Code',
+          right_on='fk_Sold-To Customer Code',
+          how='left'
+
+     )
+
+     
+
+     df_processed['Sodimac'] = np.where(
+        df_processed['Sold-To Customer Name'].str.contains('sodimac', case=False, na=False),
+        'Sodimac',
+        'Others'
+        )
+
+     df_processed=df_processed.drop(columns=['fk_Sold-To Customer Code','Sold-To Customer Name'])
+
+     return df_processed

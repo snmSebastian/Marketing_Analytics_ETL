@@ -23,9 +23,9 @@ def main():
 
     edas_update_output_file = DatamindPaths.INPUT_RAW_EDAS_FILE
     
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: EDAS DATA EXTRACTION ---")
-    print("=" * 55)
+    print("-" * 55)
+    print("---  INICIANDO PROCESO: EDAS DATA EXTRACTION ---")
+    print("-" * 55)
     conexion=conectar_snowflake_sso(Database="PROD_MARTS",Schema="EDAS_POS")
     sql="""
         SELECT
@@ -33,6 +33,9 @@ def main():
             TO_VARCHAR(sbd_fiscal_year) || '-' || TO_VARCHAR(sbd_fiscal_month) AS "Year-Month",
             TO_VARCHAR(sbd_fiscal_year) || '-' || TO_VARCHAR(sbd_fiscal_week) AS "Year-Week",
             
+            sbd_fiscal_year,
+            sbd_fiscal_month,
+
             country AS "Country",
             parent_customer AS "Retailer",
             brand AS "Brand",
@@ -48,8 +51,7 @@ def main():
         FROM 
             PROD_MARTS.EDAS_POS.VW_BRZ_EDAS_POS
         WHERE 
-            sbd_fiscal_year >= 2023
-             AND LOWER(parent_customer) || '-' || LOWER(country) IN (
+             LOWER(parent_customer) || '-' || LOWER(country) IN (
                             'dyna & cia sa-colombia',
                             'amazon.com services inc-brazil',
                             'casa ferretera sa-colombia',
@@ -65,6 +67,11 @@ def main():
             
 
         """
+
+    #            sbd_fiscal_year = EXTRACT(YEAR FROM CURRENT_DATE())
+#            AND sbd_fiscal_month = EXTRACT(MONTH FROM CURRENT_DATE())
+
+
     #             AND DATE_TRUNC('MONTH', sbd_fiscal_week_end_date) >=  DATEADD('MONTH', -1, DATE_TRUNC('MONTH', CURRENT_DATE()))
 
      #  AND sbd_fiscal_month = MONTH(ADD_MONTHS(CURRENT_DATE(), -1))
@@ -72,9 +79,9 @@ def main():
     df_queryEDAS=query(conexion,sql)
     df_queryEDAS=clean_sku(df_queryEDAS,'SKU')
     df_queryEDAS.to_parquet(edas_update_output_file,index=False)
-    
+    df_queryEDAS = df_queryEDAS.drop(columns=['sbd_fiscal_year', 'sbd_fiscal_month'], errors='ignore')
 
-    print("--- 🔄 PROCESO FINALIZADO:  EDAS DATA EXTRACTION ---")
+    print("--- PROCESO FINALIZADO:  EDAS DATA EXTRACTION ---")
 
 
 if __name__ == "__main__":

@@ -22,9 +22,9 @@ def main():
     from config_paths import SodimacPaths
 
     sodimac_edas_update_output_dir = SodimacPaths.OUTPUT_PROCESSED_PARQUETS_DIR_EDAS
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: SODIMAC EDAS DATA EXTRACTION ---")
-    print("=" * 55)
+    print("-" * 55)
+    print("---  INICIANDO PROCESO: SODIMAC EDAS DATA EXTRACTION ---")
+    print("-" * 55)
     conexion=conectar_snowflake_sso(Database="PROD_MARTS",Schema="EDAS_POS")
     sql="""
         SELECT
@@ -51,22 +51,25 @@ def main():
 
        FROM PROD_MARTS.EDAS_POS.VW_BRZ_EDAS_POS
        WHERE source_customer_indicator in ('SODIMAC_CL_POS_M','SODIMAC_CO_D','SODIMAC_MX_POS_W','SODIMAC_AR_POS_W','SODIMAC_PE_POS_W') 
-
-       AND sbd_fiscal_year = YEAR(ADD_MONTHS(CURRENT_DATE(), -1))
-       AND sbd_fiscal_month = MONTH(ADD_MONTHS(CURRENT_DATE(), -1))
-        """
-
+           AND sbd_fiscal_year = EXTRACT(YEAR FROM CURRENT_DATE())
+            AND sbd_fiscal_month = EXTRACT(MONTH FROM CURRENT_DATE())
+            """
+#        AND sbd_fiscal_year = YEAR(ADD_MONTHS(CURRENT_DATE(), -1))
+#       AND sbd_fiscal_month = MONTH(ADD_MONTHS(CURRENT_DATE(), -1))
     df_querySodimac=query(conexion,sql)
     try:
         df_querySodimac.rename(columns={
         'FK_YEAR_MONTH': 'fk_year_month'},inplace=True)
     except:
         pass
-    df_querySodimac=clean_sku(df_querySodimac,'prod_key')
+    print(df_querySodimac.columns)
+    df_querySodimac=df_querySodimac.rename(columns={'PROD_KEY': 'SKU'})   
+    df_querySodimac=clean_sku(df_querySodimac,'SKU')
+    df_querySodimac=df_querySodimac.rename(columns={'SKU':'PROD_KEY'})   
 
     group_parquet(df_querySodimac,sodimac_edas_update_output_dir , name='Sodimac_EDAS')
 
-    print("--- 🔄 PROCESO FINALIZADO: SODIMAC EDAS DATA EXTRACTION ---")
+    print("--- PROCESO FINALIZADO: SODIMAC EDAS DATA EXTRACTION ---")
 
 
 if __name__ == "__main__":

@@ -272,9 +272,15 @@ def clean_sku(df,name_column:str):
         .astype(str)          # Convierte a texto para evitar errores con nulos o números
         .str.upper()          # Convierte todo a mayúsculas
         # El replace elimina espacios y caracteres especiales en un solo paso:
-        .str.replace(allowed_pattern, '', regex=True)
+        #.str.replace(allowed_pattern, '', regex=True)
+        .str.replace('#',' ',regex=False)
+        .str.strip()
+
     )
     return df
+
+
+
 
 
 

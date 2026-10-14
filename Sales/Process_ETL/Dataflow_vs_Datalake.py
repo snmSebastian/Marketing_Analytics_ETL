@@ -65,7 +65,7 @@ def read_files_parquets_proccesed(input_path,df,name_file,metrics):
     # Solo aplicamos transformaciones de texto (upper/strip) a columnas que no son métricas ni fechas.
     for col in df_consolidated.columns:
         if col in metrics:
-            df_consolidated[col] = pd.to_numeric(df_consolidated[col], errors='coerce').fillna(0.0)
+            df_consolidated[col] = pd.to_numeric(df_consolidated[col], errors='coerce').astype('float32').fillna(0.0)
         elif col == 'Date':
             df_consolidated[col] = pd.to_datetime(df_consolidated[col], errors='coerce')
         else:
@@ -82,9 +82,9 @@ def main():
     lógica de 'Upsert' (reemplazo de registros). 4) Escritura final de los archivos Parquet.
     Returns: None: La función orquesta el proceso y no devuelve un valor.
     """
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: SALES UPDATE ETL ---")
-    print("=" * 55)
+    print("-" * 55)
+    print("--- INICIANDO PROCESO: DATAFLOW VS DATALAKE ---")
+    print("-" * 55)
     try:
         # --- CONFIGURACIÓN DE RUTAS ---
         from config_paths import SalesPaths       
@@ -97,44 +97,47 @@ def main():
         df_datalake = read_files_parquets(sales_update_raw_dir)
         metrics=['Total Sales','NSV']
         df_dataflow=read_files_parquets_proccesed(sales_dataflow,df_datalake,'sales_',metrics)
+        print('dataflow')
+        df_datalake=df_datalake[['Source System','Document Type','fk_Country','fk_year_month','Total Sales','NSV']]
+        df_dataflow=df_dataflow[['Source System','Document Type','fk_Country','fk_year_month','Total Sales','NSV']]
+        print('ok')
+        df_datalake['Total Sales']=df_datalake['Total Sales'].astype('float32')
+        df_datalake['NSV']=df_datalake['NSV'].astype('float32')
+        df_dataflow['Total Sales']=df_dataflow['Total Sales'].astype('float32')
+        df_dataflow['NSV']=df_dataflow['NSV'].astype('float32')
 
-        df_datalake=df_datalake[['Region Consolidated','fk_Country','fk_year_month','Total Sales','NSV']]
-        df_dataflow=df_dataflow[['fk_Country','fk_year_month','Total Sales','NSV']]
-        
-        df_datalake['Total Sales']=df_datalake['Total Sales'].astype(float)
-        df_datalake['NSV']=df_datalake['NSV'].astype(float)
-        df_dataflow['Total Sales']=df_dataflow['Total Sales'].astype(float)
-        df_dataflow['NSV']=df_dataflow['NSV'].astype(float)
 
-
-        df_datalake=df_datalake.rename(columns={'Region Consolidated':'Region',
+        df_datalake=df_datalake.rename(columns={
                                          'fk_Country':'Country',
                                          'fk_year_month':'Year Month',
                                          'Total Sales':'GSV'})
         
         df_dataflow=df_dataflow.rename(columns={
+                                        
                                          'fk_Country':'Country',
                                          'fk_year_month':'Year Month',
                                          'Total Sales':'GSV'})
         
-        df_group_datalake=(df_datalake.groupby(['Year Month','Country']).
+        df_group_datalake=(df_datalake.groupby(['Source System', 'Document Type','Year Month','Country']).
                     agg({
                         'GSV':'sum',
                         'NSV':'sum'
                         }).reset_index())
-        df_group_dataflow=(df_dataflow.groupby(['Year Month','Country']).
+        df_group_dataflow=(df_dataflow.groupby(['Source System', 'Document Type','Year Month','Country']).
                     agg({
                         'GSV':'sum',
                         'NSV':'sum'
                         }).reset_index())
-        df_result=pd.merge(df_group_dataflow,df_group_datalake,how='left',on=['Year Month','Country'],suffixes=('_dataflow', '_datalake'))
-        
-        df_result=df_result[['Year Month','Country','GSV_dataflow','NSV_dataflow','GSV_datalake','NSV_datalake']]
+
+        df_result=pd.merge(df_group_dataflow,df_group_datalake,how='left',on=['Source System', 'Document Type', 'Year Month', 'Country'],suffixes=('_dataflow', '_datalake'))
+        print('merge')
+        print(f'{df_result['Year Month'].unique()}')
+        df_result=df_result[['Source System','Document Type','Year Month','Country','GSV_dataflow','NSV_dataflow','GSV_datalake','NSV_datalake']]
         
         df_result['Dif GSV']=df_result['GSV_dataflow']-df_result['GSV_datalake']
         df_result['Dif NSV']=df_result['NSV_dataflow']-df_result['NSV_datalake']
-        df_result['% Dif GSV']=df_result['Dif GSV']/df_result['GSV_datalake']*100
-        df_result['% Dif NSV']=df_result['Dif NSV']/df_result['NSV_datalake']*100
+        df_result['% Dif GSV']=df_result['Dif GSV']/df_result['GSV_dataflow']
+        df_result['% Dif NSV']=df_result['Dif NSV']/df_result['NSV_dataflow']
 
         df_result=df_result.sort_values(by=['Country','Year Month',])
         df_result.to_excel(historicalChanges,index=False)

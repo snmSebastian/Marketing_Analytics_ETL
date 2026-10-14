@@ -78,23 +78,13 @@ def main():
     #  CONFIGURACIÓN DE RUTAS Y MÓDULOS
     # =========================================================================
     BASE_PATH = Path(
-
-        r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace'
+        r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace'        
     )
     # Directorio donde se encuentran todos tus módulos (la carpeta 'Scripts')
     DIRECTORIO_RAIZ_MODULOS = BASE_PATH / 'Scripts'
     # Nombre del MÓDULO ETL que queremos ejecutar (NO la ruta del archivo)
-    # Corresponde a Master_Products/Update_md_products.py
-    
-    #modulo_products = 'Master_Products.Update_md_products' 
-    modulo_sku_review='Master_Products.Generate_sku_review'
-    #modulo_hts='Master_Products.Update_File_HTS'
-    #modulo_pwt='Master_Products.Update_File_PWT'
-    #modulo_customers='Master_Customers.Update'
-    #modulo_demand='Demand.Process_ETL.Update'
-    #modulo_fill_rate='Fill_Rate.Process_ETL.Update'
-    #modulo_sales='Sales.Process_ETL.Update'
-    
+
+    modulo_sku_review='Master_Products.Generate_sku_review'    
     # Diccionario de módulos a ejecutar: {nombre_amigable: nombre_del_modulo}
     MODULOS_ETL = {
         #"Demand Update": modulo_demand,
@@ -130,8 +120,8 @@ def main():
     # --- DEFINICION SUBJECT Y BOD
     # ===================================================
     SUBJECTS_ETL = [
-        "Proceso ETL Finalizado con Éxito",                      # Éxito (lst_subject[0])
-        "ERROR: {num} de {total} Módulos Fallaron en ETL Diario"  # Fallo (lst_subject[1])
+        "File SKU Review Updated ",                      # Éxito (lst_subject[0])
+        "ERROR: No se actualizo SKU Review"  # Fallo (lst_subject[1])
     ]
     # Definición de Body (Plantillas HTML COMPLETAS)
         # lst_body[0]: Body de Éxito
@@ -139,18 +129,11 @@ def main():
     BODY_TEMPLATE_EXITO = f"""
     <html>
     <body>
-        <h2 style="color: green;">✅ ¡Proceso ETL Finalizado con Éxito!</h2>
         <p>Hola,</p>
-        <p>La orquestación ETL se ejecutó correctamente, procesando <b>{{total_modulos}} módulos</b> sin registrar errores críticos.</p>
-        
-        <hr style="border: 1px solid #ccc;">     
-
-        <h3>2. Revisión de SKUs (Acción Manual)</h3>
         <p>El archivo <b>Sku_for_Review.xlsx</b> ha sido generado y actualizado en SharePoint con los siguientes criterios:</p>
         <ul>
             <li><b>Nuevos SKUs</b> (Para categorización inicial).</li>
-            <li><b>SKUs existentes</b> que requieren revisión porque su SKU base comparte diferentes categorías.</li>
-            <li><b>SKUs aleatorios</b> por revisar (Mantenimiento de calidad).</li>
+            <li><b>SKU Base con diferentes sbu-category</b> que requieren revisión porque su SKU base comparte diferentes categorías.</li>
         </ul>
         
         <p style="font-weight: bold; color: #cc0000; margin-top: 15px;">
@@ -160,17 +143,9 @@ def main():
         <p style="margin-top: 20px;">Accede al archivo a través del siguiente enlace:</p>
         <p style="font-size: 1.2em;">
             <a href="https://ecentral.sharepoint.com/:x:/r/sites/GTS_Marketing/LAG-IPGPDR/_layouts/15/Doc.aspx?sourcedoc=%7B956C36AE-F7E5-4F48-9C6E-FD516560DBDA%7D&file=Sku_for_Review.xlsx&action=default&mobileredirect=true" target="_blank">
-                🔗 Abrir Sku_for_Review.xlsx
+                🔗 Sku_for_Review.xlsx
             </a>
         </p>
-        <p>Una vez revisado los nuevos productos se procederan a actualizar los dataflows:</p>
-        <ul>
-            <li>Demand.</li>
-            <li>Fill Rate</li>
-            <li>Sales.</li>
-            <li>MD Customers.</li>
-            <li>MD Products.</li>
-        </ul>
         <p style="margin-top: 30px;">Saludos,</p>
         
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
@@ -184,20 +159,9 @@ def main():
     BODY_TEMPLATE_FALLO = f"""
     <html>
     <body>
-        <h2 style="color: red;">🚨 ¡ATENCIÓN CRÍTICA! Fallos en la Orquestación ETL</h2>
-        <p>Estimado equipo,</p>
-        <p>El proceso ETL falló. Se detectaron <b>{{num_fallidos}} errores</b> de un total de <b>{{total_modulos}} módulos</b>. Se requiere revisión inmediata.</p>
+        <p>Hola,</p>
+        <p>El proceso de actualizar el archivo <b>SKU Review </b>falló. </p>
         
-        <p style="font-weight: bold; color: red; margin-top: 15px;">
-            🚫 Proceso Detenido: Hasta que el problema se solucione, la <b>actualización de los Dataflows</b> de Demand, Sales, Fill Rate y Master Customers ha sido <b>paralizada</b> para evitar inyectar datos corruptos.
-        </p>
-        
-        <hr style="border: 1px solid #ccc;">
-
-        <h3>Resumen de Errores:</h3>
-        {{detalle_errores}} 
-        
-        <p style="margin-top: 20px;">Por favor, revise los logs en el servidor para el detalle completo.</p>
         
         <p style="margin-top: 30px;">Saludos.</p>
         

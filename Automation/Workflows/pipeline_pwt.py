@@ -123,8 +123,8 @@ def main():
     # --- DEFINICION SUBJECT Y BOD
     # ===================================================
     SUBJECTS_ETL = [
-        "Archivo PWT ACTUALIZADO",  # Éxito (lst_subject[0])
-        "ERROR CRÍTICO: Fallo en ETL - Archivo PWT NO GENERADO" # Fallo (lst_subject[1])
+        "Archivo PTG Actualizado",  # Éxito (lst_subject[0])
+        "Archivo PTG NO Actualizado" # Fallo (lst_subject[1])
     ]
     # Definición de Body (Plantillas HTML COMPLETAS)
         # lst_body[0]: Body de Éxito
@@ -132,34 +132,28 @@ def main():
     BODY_TEMPLATE_EXITO = f"""
     <html>
     <body>
-        <h2 style="color: green;">✅ Archivo PWT Actualizado y Listo para Revisión</h2>
-        <p>Hola Carlos buenos días,</p>
-        <p> Te comento que el archivo de <b>Clasificación PWT</b> ha sido actualizado con la información más reciente y está listo para tu revisión y apoyo con la asignación de datos.</p>
+        <p>Hola equipo buen día,</p>
+        <p> Les comento que el archivo de <b>Clasificación PTG</b> ha sido actualizado  y está listo para tu apoyo clasificando los nuevos SKUs.</p>
         
         <hr style="border: 1px solid #ccc;">
 
-        <h3>Contenido del Archivo y Definiciones Clave:</h3>
-        <p>Por favor, enfócate en los nuevos SKUs y en los ítems pendientes de verificación. A continuación, se detallan los estados de revisión:</p>
+        <h3>Definiciones (Columna 'SOURCE SKU'):</h3>
         
         <table border="0" style="width: 95%; font-size: 0.9em;">
             <tr>
-                <td style="width: 20%; padding-top: 5px; font-weight: bold; color: #007bff;">'New sku'</td>
-                <td style="padding-top: 5px;">SKUs completamente <b>nuevos</b> que requieren tu <b>asignación inicial</b> de información Group PWT.</td>
+                <td style="width: 20%; padding-top: 5px; font-weight: bold; color: #007bff;">'Nueva Existencia'</td>
+                <td style="padding-top: 5px;">SKUs completamente <b>nuevos</b> que requieren tu <b>asignación inicial</b> de información PTG y  otros campos clave.</td>
             </tr>
             <tr>
-                <td style="width: 20%; padding-top: 5px; font-weight: bold; color: #ff9900;">'SKU Existente - Revisión: Faltan datos en campos clave'</td>
-                <td style="padding-top: 5px;">SKUs existentes que necesitan revisión ya que <b>algunos campos clave no poseen información</b> y deben ser verificados.</td>
-            </tr>
-            <tr>
-                <td style="width: 20%; padding-top: 5px; font-weight: bold; color: #28a745;">'Verified'</td>
-                <td style="padding-top: 5px;">SKUs que ya han sido revisados y <b>poseen información en todos los campos</b> requeridos (No necesitan acción).</td>
+                <td style="width: 20%; padding-top: 5px; font-weight: bold; color: #ff9900;">'SKU Ya Existente'</td>
+                <td style="padding-top: 5px;">SKUs existentes en donde  <b>algunos campos clave no poseen información</b> y de ser necesario deben ser completados..</td>
             </tr>
         </table>
 
         <p style="margin-top: 20px;"><b>Accede al archivo a través del siguiente enlace:</b></p>
         <p style="font-size: 1.2em;">
-            <a href="https://ecentral.sharepoint.com/:x:/r/sites/GTS_Marketing/LAG-IPGPDR/_layouts/15/Doc.aspx?sourcedoc=%7B5D6341F7-46A5-4A5E-83B9-77F9517DC43C%7D&file=PWT_Classification_Workfile.xlsx&action=default&mobileredirect=true" target="_blank">
-                🔗 Abrir PWT_Classification_Workfile.xlsx
+            <a href="https://ecentral.sharepoint.com/:x:/r/sites/LAGAnalyticsDataRepository/Shared%20Documents/Analytics_Workspace/Data/Raw/Products/working_files_for_pwt_hts_products/PWT_Classification_Workfile.xlsx?d=we823d8c9148643bc92155a7cfb71051a&csf=1&web=1&e=wLASke" target="_blank">
+                🔗 PTG_Classification_Workfile.xlsx
             </a>
         </p>
 
@@ -179,26 +173,25 @@ def main():
 
     BODY_TEMPLATE_FALLO = f"""
     <html>
-    <body>
-        <h2 style="color: red;">🚨 ¡ALERTA! Fallos en la Orquestación ETL - PWT Classification</h2>
-        <p>Estimado equipo,</p>
-        <p>El proceso de actualización ETL falló. Se detectaron errores
-        <p>Por esta razón, el archivo <b>PWT_Classification_Workfile.xlsx</b> <b>NO se ha actualizado</b> o podría contener información incompleta/errónea.</p>
-        
-        <p>Se requiere revisión inmediata de la orquestación. Por favor, <b>abstenerse de usar el archivo PWT</b> hasta nuevo aviso.</p>
-        
-        <p><b>Detalle de Módulos con Error:</b></p>
-        {{detalle_errores}}
-        
-        <p>Saludos.</p>
+      <body>
+    <p>Hola equipo, buen día,</p>
+    <p>Les comento que el archivo de <b>Clasificación PTG</b> no ha podido ser actualizado el día de hoy debido a un problema técnico durante el proceso.</p>
+    
+    <hr style="border: 1px solid #ccc;">
 
-        <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
-        <b>Sebastian Nuñez.</b><br>
-        Data Science & Data Base Analyst.<br>
-        Stanley Black & Decker, Inc.
-        </p>
-        
-    </body>
+    <p style="margin-top: 20px;">Ya me encuentro trabajando en la solución  para restaurar el flujo correcto. Les notificaré de inmediato en cuanto la nueva versión esté limpia, actualizada y lista para trabajar.</p>
+    
+    <p>Lamento los inconvenientes y agradezco tu comprensión.</p>
+    <p>Saludos.</p>
+
+    <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
+    <b>Sebastian Nuñez.</b><br>
+    Data Scientist & Data Base Analyst.<br>
+    Stanley Black & Decker, Inc.
+    </p>
+</body>
+
+
     </html>
     """
     BODY_TEMPLATES = [BODY_TEMPLATE_EXITO, BODY_TEMPLATE_FALLO]
@@ -207,7 +200,7 @@ def main():
     # =============================
     
     # Llamada a la función
-    lst_email = ['sebastian.nunez@sbdinc.com']
+    lst_email = ['sebastian.nunez@sbdinc.com','Adrian.Orozco@sbdinc.com','Javier.Mayoral@sbdinc.com','carlos.pinilla@sbdinc.com']
     send_etl_report(
         resultados_ejecucion, 
         lst_email, 

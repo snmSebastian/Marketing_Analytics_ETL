@@ -102,7 +102,7 @@ def main():
         country_code_file = FillRatePaths.INPUT_PROCESSED_COUNTRY_CODES_FILE
         
         # --- PROCESAMIENTO DE ARCHIVOS DE ACTUALIZACIÓN ---
-        df_country = pd.read_excel(country_code_file, sheet_name='Code Country Fillrate-Sales', dtype=str, engine='openpyxl')
+        df_country = pd.read_excel(country_code_file, sheet_name='Code Country Fillrate', dtype=str, engine='openpyxl')
         for col in df_country.columns:
             df_country[col] = df_country[col].astype(str).str.upper().str.strip()
 
@@ -111,12 +111,12 @@ def main():
                     'Fill Rate First Pass Order $', 'Fill Rate First Pass Invoice $']
 
         df_update = read_files(fill_rate_update_raw_dir)
-    
+        print('read files')
         #========================
         # Limpieza sku
         #========================
         df_update = clean_sku(df_update, 'Country Material')
-        
+        print('clean sku')
     
     
     
@@ -130,13 +130,10 @@ def main():
     
     
         df_update = asign_country_code(df_update, df_country)
+        print('assing country code')
         df_update = process_columns(df_update, lst_columns)
-        
+        print('process columns')
    
-
-
-
-
         # Defino formato de las columnas
         lst_columns_str=['fk_Date', 'fk_year_month', 'fk_Country', 'fk_Sold_To_Customer_Code',
         'fk_SKU']

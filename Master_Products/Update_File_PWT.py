@@ -29,6 +29,8 @@ import pandas as pd
 import numpy as np
 import sys
 from Fill_Rate.Process_ETL.Process_Files import clean_sku
+from Master_Products.Update_md_products import update_master_data
+from Master_Products.column_processing  import assign_proyects
 
 def update_file_pwt(md_product,lst_columns_pwt,df_pwt):
     """
@@ -46,24 +48,16 @@ def update_file_pwt(md_product,lst_columns_pwt,df_pwt):
     Returns: pd.DataFrame: DataFrame listo para exportar que contiene solo los SKUs PWT, incluyendo la columna 'check_sku' con el estado de
              verificación y la necesidad de revisión.
     """
-    df_filter_pwt=md_product[((md_product['GPP SBU']=='PWT') | (md_product['GPP SBU']=='FAS')) &
+    df_filter_pwt=md_product[((md_product['GPP SBU']=='PWT') | (md_product['GPP SBU']=='FAS')| (md_product['GPP SBU']=='ANF')|(md_product['GPP SBU']=='HHD')|(md_product['GPP SBU']=='MED')) &
                              (md_product['Brand'].str.upper()=='DEWALT')][lst_columns_pwt].copy()
     mask_sku_md=df_filter_pwt['SKU'].isin(df_pwt['SKU'])
-    df_filter_pwt['check_sku']=np.where(
+    df_filter_pwt['source_sku']=np.where(
                                 mask_sku_md, 
-                                'Verified', 
-                                'New sku'
+                                'SKU Ya Existente', 
+                                'Nueva Existencia'
                              )
-    df_filter_pwt['concat_info']=(df_filter_pwt['Group 1']+df_filter_pwt['Group 2']).str.lower().str.strip().str.replace(' ', '')
-    mask_sku_old=((df_filter_pwt['check_sku']=='Verified') &
-                  (df_filter_pwt['concat_info'].str.contains('-')))
-    df_filter_pwt['check_sku']=np.where(
-                                mask_sku_old, # Condición
-                                'SKU Existente - Revisión: Faltan datos en campos clave', # Valor si la condición es True
-                                df_filter_pwt['check_sku'] # Valor si la condición es False (mantiene el valor original, que en este caso es 'verified')
-                                )
-    df_filter_pwt=df_filter_pwt.sort_values(by=['check_sku','SKU','SKU Base'])
-    df_filter_pwt=df_filter_pwt[lst_columns_pwt+['check_sku']]
+    df_filter_pwt=df_filter_pwt.sort_values(by=['source_sku','SKU','SKU Base'])
+    df_filter_pwt=df_filter_pwt[lst_columns_pwt+['source_sku']]
     df_filter_pwt=df_filter_pwt.fillna('-')
     return df_filter_pwt
 
@@ -82,11 +76,18 @@ def main():
         from config_paths import MasterProductsPaths
         path_md_product = MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE
         path_pwt=MasterProductsPaths.WORKFILE_PWT_FILE
+        path_proyects=MasterProductsPaths.INPUT_PROCESSED_PROYECTS_FILE
+
         lst_columns_pwt=['SKU', 'SKU Base', 'SKU Description', 'Brand', 'GPP SBU',
         'GPP Division Code', 'GPP Division Description',
-        'GPP Category Description', 'GPP Portfolio Description','Group 1','Group 2']
+        'GPP Category Description', 'GPP Portfolio Description','Corded / Cordless','Batteries Qty', 'Dewalt XR','DW Ind/HvyInd','Group 1','Group 2']
         df_pwt=pd.read_excel(path_pwt, dtype=str, engine='openpyxl')
         df_md_product=pd.read_excel(path_md_product, dtype=str, engine='openpyxl')
+        df_proyects=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='Proyects')
+        df_dewaltXR=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='DW_XR')
+        df_dw_ind=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='Dewalt Indust_Type')
+        df_dw_pyp=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='DeWalt P&P')    
+        df_powerconnect=pd.read_excel(path_proyects, dtype=str, engine='openpyxl',sheet_name='PowerConnect')
         
 
         #------------------------
@@ -95,8 +96,18 @@ def main():
         df_pwt=clean_sku(df_pwt,'SKU')
         df_md_product=clean_sku(df_md_product,'SKU')
 
+
+
+        # ----  Agregar info PWT
+        # Primero agrego la informacion de pwt al md products, para asi cuando actualice hts, no se pierda ningun ajuste
         
-        df_update_pwt=update_file_pwt(df_md_product,lst_columns_pwt,df_pwt)
+        #Asigno nombre de proyectos
+        df_assign_proyects= assign_proyects(df_md_product, df_proyects, df_dewaltXR, df_dw_ind,df_dw_pyp,df_powerconnect)
+        
+        lst_pwt=['Corded / Cordless','Batteries Qty', 'Dewalt XR','DW Ind/HvyInd','Group 1','Group 2']
+        df_update_md = update_master_data(df_assign_proyects, df_pwt, 'SKU', lst_pwt)
+        
+        df_update_pwt=update_file_pwt(df_update_md,lst_columns_pwt,df_pwt)
         df_update_pwt.to_excel(path_pwt, index=False)
         print("Proceso de actualización de productos completado exitosamente.")
         pass

@@ -47,9 +47,9 @@ def notation_classification_customers_datalake(df_customers, df_notation):
     df_n['fk_key'] = df_n['SOLDTO_DIST_TYPE_DESC_HMZ'] + '-' + df_n['SOLDTO_DIST_CHNL_DESC_HMZ']
     
     #Creamos diccionario para mapear a traves de la llave
-    mapping_fk = dict(zip(df_n['fk_key'], df_n['Final']))
-    mapping_subcanal = dict(zip(df_n['SOLDTO_DIST_TYPE_DESC_HMZ'], df_n['Final']))
-    
+    mapping_opc1 = dict(zip(df_n['fk_key'], df_n['Final']))
+    mapping_opc2 = dict(zip(df_n['SOLDTO_DIST_TYPE_DESC_HMZ'], df_n['Final']))
+    mapping_opc3 = dict(zip(df_n['SOLDTO_DIST_CHNL_DESC_HMZ'],df_n['Final']))    
     # 3. Pre-procesar llaves en el dataframe principal
     cols_to_clean = ['SubCanalopc1', 'Canalopc1', 'SubCanalopc2', 'Canalopc2', 'fk_Sold-To Customer Code']
     for col in cols_to_clean:
@@ -64,10 +64,27 @@ def notation_classification_customers_datalake(df_customers, df_notation):
     # Intentamos encontrar match en orden de prioridad: key1, key2, y luego individuales
     # Usamos .map() que es extremadamente eficiente en Pandas
     df_c['fk_Dist_Channel'] =(
-        df_c['SubCanalopc1'].map(mapping_subcanal)
-        .fillna(df_c['SubCanalopc2'].map(mapping_subcanal))
-        .fillna(df_c['fk_key1'].map(mapping_fk))
-        .fillna(df_c['fk_key2'].map(mapping_fk))
+        #primero busco la llave compuesta 
+        df_c['fk_key1'].map(mapping_opc1)
+        .fillna(df_c['fk_key2'].map(mapping_opc1))
+        #luego busco cada columna    
+
+        .fillna(df_c['SubCanalopc1'].map(mapping_opc3))
+        .fillna(df_c['SubCanalopc2'].map(mapping_opc3))
+
+
+        .fillna(df_c['SubCanalopc1'].map(mapping_opc2))
+
+
+        .fillna(df_c['Canalopc1'].map(mapping_opc2))
+        .fillna(df_c['Canalopc1'].map(mapping_opc3))
+        
+        .fillna(df_c['SubCanalopc2'].map(mapping_opc2))
+        
+
+        .fillna(df_c['Canalopc2'].map(mapping_opc2))
+        .fillna(df_c['Canalopc2'].map(mapping_opc3))
+        
         .fillna("NOTFOUND")
         )    
 
@@ -88,9 +105,9 @@ def main():
 
     df_notation_subchannel_datalake_w_error=pd.read_excel(Notation_subchannel_datalake_w_error, dtype=str, engine='openpyxl',sheet_name='List_SubChannel_w_error')
         
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: CUSTOMERS DATA EXTRACTION ---")
-    print("=" * 55)
+    print("-" * 55)
+    print("--- INICIANDO PROCESO: CUSTOMERS DATA EXTRACTION ---")
+    print("-" * 55)
     conexion=conectar_snowflake_sso(Database="PROD_MARTS",Schema="LAGBI")
     sql="""
     SELECT 
@@ -112,16 +129,15 @@ def main():
 
 
     FROM PROD_MARTS.LAGBI.VW_BRZ_SALES_BILLING_LAGBI  
-    WHERE DOCUMENT_TYPE <>'CREDIT'      
         """
 #AND FMTH_ID = TO_CHAR(ADD_MONTHS(CURRENT_DATE(), -1), 'YYYYMM')
     df_queryCustomers=query(conexion,sql)
     df_queryCustomers.drop_duplicates(['fk_Sold-To Customer Code','fk_Country'],inplace=True)
     df_queryCustomers=notation_classification_customers_datalake(df_queryCustomers,df_notation_subchannel_datalake_w_error)
     df_queryCustomers.to_excel(query_customers_file,index=False)
-    print(df_queryCustomers.columns)
+    
     #print(df_queryDemand.head())
-    print("--- 🔄 PROCESO FINALIZADO: QUERY CUSTOMERS DATA EXTRACTION ---")
+    print("--- PROCESO FINALIZADO: QUERY CUSTOMERS DATA EXTRACTION ---")
 
 
 if __name__ == "__main__":

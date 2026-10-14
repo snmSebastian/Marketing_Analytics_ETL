@@ -1,10 +1,14 @@
 Program/script
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+
 
 Add argument
--NoExit -ExecutionPolicy Bypass -File "C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts\Automation\init_scripts\pipeline_QueryDemand.ps1"
+
+-NoExit -ExecutionPolicy Bypass -File "C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Scripts\Automation\init_scripts\pipeline_D_FR_S_C_SR.ps1"
 
 start in
-1)C:\Users\SSN0609\OneDrive - Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts
 
-2)C:\Users\SSN0609\Stanley Black & Decker\Latin America - Regional Marketing - Marketing Analytics\Scripts
+C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Scripts
+
+

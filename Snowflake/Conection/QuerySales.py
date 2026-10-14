@@ -20,85 +20,116 @@ def main():
     """
     from config_paths import SalesPaths      
     sales_update_raw_dir = SalesPaths.INPUT_RAW_UPDATE_DIR
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: SALES DATA EXTRACTION ---")
-    print("=" * 55)
+    print("-" * 55)
+    print("--- INICIANDO PROCESO: SALES DATA EXTRACTION ---")
+    print("-" * 55)
     conexion=conectar_snowflake_sso(Database="PROD_MARTS",Schema="LAGBI")
     #conexion=conectar_snowflake_password(Database="PROD_MARTS",Schema="LAGBI")
     sql="""
-    SELECT 
-                SRC_SYS_KEY AS "Source System",
-                DOCUMENT_TYPE AS "Document Type",
+        WITH base AS (
+            SELECT 
+                SRC_SYS_KEY,
+                DOCUMENT_TYPE,
+                FMTH_ID_FINANCIAL,
+                FWK_ID,
+                ENTITY_LEVE3_LNDESC,
+                ENTITY_LEVE4_LNDESC,
+                ENTITY_LEVE6_LNDESC,
+                ENTITY_LEVE7_LNDESC,
+                ENTITY_LEVE8_LNDESC,
+                ENTITY_LEVE9_LNDESC,
+                SOLDTO_CUST_KEY,
+                SOLDTO_CUST_NAME,
+                PROD_ID_HRMZ,
+                PROD_ID,
+                PROD_KEY,
+                PROD_NAME,
+                BRAND_DESC,
+                GPP_DIVISION_DESC,
+                GPP_DIVISION_ID,
+                GPP_CATEGORY_DESC,
+                GPP_CATEGORY_ID,
+                GPP_PORTFOLIO_DESC,
+                GPP_PORTFOLIO_ID,
+                DISPATCH_BCRNCY_AMT_PLRATE,
+                COST_DCRNCY_AMT_USD_PLRATE,
+                DISPATCH_INVC_QTY,
+                RETURN_QTY,
+                NSV_BCRNCY_AMT_PLRATE,
+                FX_NSV_BCRNCY_AMT_PLRATE,
+                FX_NSV_FINANCIAL_PLRATE,
+                OUTBOUND_BCRNCY_USD_PLRATE,
+                DISPATCH_BCRNCY_AMT,
+                CASE
+                    WHEN TRIM(ENTITY_LEVE5_LNDESC) = 'Trinidad And Tobago' THEN 'Trinidad y Tobago'
+                    WHEN TRIM(ENTITY_LEVE5_LNDESC) IN ('Dom Rep', 'Republica Dominicana') THEN 'Dominican Republic'
+                    ELSE ENTITY_LEVE5_LNDESC
+                END AS country_normalized
+            FROM PROD_MARTS.LAGBI.VW_BRZ_SALES_BILLING_LAGBI
+        )
 
-    
-                concat( right(FMTH_ID_FINANCIAL,2),'/01/',left( FMTH_ID_FINANCIAL,4))  AS "fk_Date",
-                concat( left( FMTH_ID_FINANCIAL,4),'-',right(FMTH_ID_FINANCIAL,2)) AS "fk_year_month",
-                FWK_ID AS "Week",
+        SELECT 
+            SRC_SYS_KEY AS "Source System",
+            DOCUMENT_TYPE AS "Document Type",
 
-                ENTITY_LEVE3_LNDESC AS "Region Cluster",
-                ENTITY_LEVE4_LNDESC AS "Region Consolidated",
-                ENTITY_LEVE5_LNDESC AS "fk_Country",
-                ENTITY_LEVE6_LNDESC AS "Country Detail",
-                
-                ENTITY_LEVE7_LNDESC AS "Sales Type",
-                ENTITY_LEVE8_LNDESC AS "Sales Type Detail",
-                ENTITY_LEVE9_LNDESC AS "Sales Type Invoince Country",
+            CONCAT(RIGHT(FMTH_ID_FINANCIAL, 2), '/01/', LEFT(FMTH_ID_FINANCIAL, 4)) AS "fk_Date", 
+            CONCAT(LEFT(FMTH_ID_FINANCIAL, 4), '-', RIGHT(FMTH_ID_FINANCIAL, 2)) AS "fk_year_month",
+            
+            FWK_ID AS "Week",
 
-                SOLDTO_CUST_KEY AS "fk_Sold_To_Customer_Code",
-                soldto_cust_name as "Customer Name",
-                PROD_ID_HRMZ AS "fk_SKU",
-                prod_name as "SKU Description",
-                brand_desc as "Brand",
+            ENTITY_LEVE3_LNDESC AS "Region Cluster",
+            ENTITY_LEVE4_LNDESC AS "Region Consolidated",
 
-                gpp_division_desc as "GPP Division",
-                gpp_division_id as "GPP Division Code",
-                gpp_category_desc as "GPP Category",
-                gpp_category_id as "GPP Category Code",
-                gpp_portfolio_desc as "GPP Portafolio",
-                gpp_portfolio_id as "GPP Portafolio Code",
-                    
-                DISPATCH_BCRNCY_AMT_PLRATE AS "Total Sales",            
-                COST_DCRNCY_AMT_USD_PLRATE AS "Total Cost",
-                DISPATCH_INVC_QTY AS "Units Sold",
-                return_qty as "Units Return",
-                NSV_BCRNCY_AMT_PLRATE AS "NSV",
-                fx_nsv_bcrncy_amt_plrate as "FX Rate NSV",
-                fx_nsv_financial_plrate as "fx_nsv_financial",
-                outbound_bcrncy_usd_plrate as "Outbound"
+            CASE 
+                WHEN UPPER(ENTITY_LEVE4_LNDESC) = 'MTD' THEN CONCAT(country_normalized, ' MTD')
+                ELSE country_normalized
+            END AS "fk_Country",
 
+            ENTITY_LEVE6_LNDESC AS "Country Detail",
+            ENTITY_LEVE7_LNDESC AS "Sales Type",
+            ENTITY_LEVE8_LNDESC AS "Sales Type Detail",
+            ENTITY_LEVE9_LNDESC AS "Sales Type Invoince Country",
 
+            SOLDTO_CUST_KEY AS "fk_Sold_To_Customer_Code",
+            SOLDTO_CUST_NAME AS "Customer Name",
+            
+            COALESCE(PROD_ID_HRMZ, PROD_ID, PROD_KEY) AS "fk_SKU",
+            PROD_ID,
+            PROD_KEY,
+            PROD_NAME AS "SKU Description",
+            BRAND_DESC AS "Brand",
 
+            GPP_DIVISION_DESC AS "GPP Division",
+            GPP_DIVISION_ID AS "GPP Division Code",
+            GPP_CATEGORY_DESC AS "GPP Category",
+            GPP_CATEGORY_ID AS "GPP Category Code",
+            GPP_PORTFOLIO_DESC AS "GPP Portafolio",
+            GPP_PORTFOLIO_ID AS "GPP Portafolio Code",
 
-    FROM PROD_MARTS.LAGBI.VW_BRZ_SALES_BILLING_LAGBI  
-    WHERE DOCUMENT_TYPE <>'CREDIT'      
-  
-    """
-#    AND FMTH_ID_FINANCIAL >= TO_CHAR(ADD_MONTHS(CURRENT_DATE(), -6), 'YYYYMM')
-
-   # AND FMTH_ID_FINANCIAL = TO_CHAR(CURRENT_DATE(), 'YYYYMM')
-
-    # TRAE INFO DEL MES ANTERIOR HASTA EL DIA DE HOY
-    #-- Desde el primer día del mes pasado
-    #  AND FMTH_ID_FINANCIAL >= TO_CHAR(ADD_MONTHS(CURRENT_DATE(), -1), 'YYYYMM')
-    #  -- Hasta el mes en curso actual
-    #  AND FMTH_ID_FINANCIAL <= TO_CHAR(CURRENT_DATE(), 'YYYYMM')
-
-    #AND FMTH_ID_FINANCIAL = TO_CHAR(ADD_MONTHS(CURRENT_DATE(), -1), 'YYYYMM')
-
-    #AND FMTH_ID_FINANCIAL BETWEEN '202301' AND '202501'
-    #AND SRC_SYS_KEY <>'QADBR'
-    #    AND FMTH_ID_FINANCIAL = TO_CHAR(ADD_MONTHS(CURRENT_DATE(), -1), 'YYYYMM')
-
+            DISPATCH_BCRNCY_AMT_PLRATE AS "Total Sales",
+            COST_DCRNCY_AMT_USD_PLRATE AS "Total Cost",
+            DISPATCH_INVC_QTY AS "Units Sold",
+            RETURN_QTY AS "Units Return",
+            NSV_BCRNCY_AMT_PLRATE AS "NSV",
+            FX_NSV_BCRNCY_AMT_PLRATE AS "FX Rate NSV",
+            FX_NSV_FINANCIAL_PLRATE AS "fx_nsv_financial",
+            OUTBOUND_BCRNCY_USD_PLRATE AS "Outbound",
+            DISPATCH_BCRNCY_AMT AS "GSV Local"
+        FROM base
+        """
+#        WHERE FMTH_ID_FINANCIAL >= TO_CHAR(ADD_MONTHS(CURRENT_DATE(), -8), 'YYYYMM');
     df_querySales=query(conexion,sql)
     
     if df_querySales is None:
         print("Error: No se pudieron obtener datos de ventas de Snowflake. Terminando el proceso.")
         return
 
+    df_querySales = df_querySales.drop(columns=['PROD_ID','PROD_KEY'])
     df_querySales=clean_sku(df_querySales,'fk_SKU')
+    
     df_querySales.to_parquet(sales_update_raw_dir /'QuerySales.parquet', index=False)
     #print(df_queryDemand.head())
-    print("--- 🔄 PROCESO FINALIZADO: SALES DATA EXTRACTION ---")
+    print("---PROCESO FINALIZADO: SALES DATA EXTRACTION ---")
 
 
 if __name__ == "__main__":

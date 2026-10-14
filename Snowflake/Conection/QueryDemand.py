@@ -41,30 +41,30 @@ def main():
     """
     from config_paths import DemandPaths
     demand_update_raw_dir = DemandPaths.INPUT_RAW_UPDATE_DIR
-    print("=" * 55)
-    print("--- 🔄 INICIANDO PROCESO: DEMAND DATA EXTRACTION ---")
-    print("=" * 55)
+    print("-" * 55)
+    print("---  INICIANDO PROCESO: DEMAND DATA EXTRACTION ---")
+    print("-" * 55)
     conexion=conectar_snowflake_sso(Database="PROD_MARTS",Schema="DEMAND")
     sql="""
-        SELECT
-            FISCAL_PERIOD as "Fiscal Period",
-            FYR_ID as "Fiscal Year",
-            PROD_KEY as "Global Material",
-            DMD_GRP_KEY as "Demand Group",
-            LOC_KEY as "Plant Code",
-            GPP_BASIC_SBU_NAME as "SBU",
-            GPP_BASIC_DIV_NAME as "GPP Division Code",
-            DMD_GPP_CTGY_CD as "GPP Category Code",
-            DMD_GPP_BASIC_PORTFOLIO as "GPP Portfolio Code",
-            FCST_QTY,
-            FORECAST_VALUE_GSV AS "FORECAST_VALUE_GSV",
-            CURRENT_STANDARD_COST
-                                
-      FROM PROD_MARTS.DEMAND.vW_BRZ_DEMAND_HISTORY_FORECAST_TOOLS
+      SELECT
+                  FISCAL_PERIOD as "Fiscal Period",
+                  FYR_ID as "Fiscal Year",
+                  PROD_KEY as "Global Material",
+                  DMD_GRP_KEY as "Demand Group",
+                  LOC_KEY as "Plant Code",
+                  GPP_BASIC_SBU_NAME as "SBU",
+                  GPP_BASIC_DIV_NAME as "GPP Division Code",
+                  DMD_GPP_CTGY_CD as "GPP Category Code",
+                  DMD_GPP_BASIC_PORTFOLIO as "GPP Portfolio Code",
+                  FCST_QTY,
+                  FORECAST_VALUE_GSV AS "FORECAST_VALUE_GSV",
+                  CURRENT_STANDARD_COST
+                                    
+            FROM PROD_MARTS.DEMAND.vW_BRZ_DEMAND_HISTORY_FORECAST_TOOLS
       
       WHERE 
       FYR_ID >= YEAR(CURRENT_DATE()) 
-      AND FYR_ID <=YEAR(CURRENT_DATE())+1
+      AND FYR_ID <=YEAR(CURRENT_DATE())+2
      
      AND DMD_GRP_KEY IN ('ARDIST','AREASY','ARECOMM','ARFZ','ARHYPER','ARINTERCO','AROTHER',
                         'ARSODIMAC','CHARDISTFZ','MRARAFIL','MRAROTH','MRUROTH','BRARDIST',
@@ -76,16 +76,13 @@ def main():
                         'MRECFNL','BNDSAWSEG','MRMXOTH','MXFNL','MXHD','MXINTERCO','MXMDR',
                         'MXOD','MXOM','MXOTHER','MXTRAD','MXWM','BRINTERCO','MRPEMDR','MRPEOTH',
                         'PEIND','PEINTERCO','PEMDR','PEOTHER','PESODIMAC','BRMDR','CHARPUBFZ','BRARPUB','COFNL','PEECOMM')
-
         """
 #WHERE FISCAL_PERIOD >= MONTH(CURRENT_DATE()) 
       
     df_queryDemand=query(conexion,sql)
-    print(df_queryDemand.head())
     df_queryDemand=clean_sku(df_queryDemand,'Global Material')
     df_queryDemand.to_parquet(demand_update_raw_dir / 'QueryDemand.parquet', index=False)
-    print(df_queryDemand.head())
-    print("--- 🔄 PROCESO FINALIZADO: DEMAND DATA EXTRACTION ---")
+    print("---  PROCESO FINALIZADO: DEMAND DATA EXTRACTION ---")
 
 if __name__ == "__main__":
     main()

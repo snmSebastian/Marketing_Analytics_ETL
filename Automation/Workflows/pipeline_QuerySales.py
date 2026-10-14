@@ -89,17 +89,16 @@ def main():
     #modulo_customers='Master_Customers.Update'
     #modulo_demand='Demand.Process_ETL.Update'
     #modulo_fill_rate='Fill_Rate.Process_ETL.Update'
-    #modulo_sales='Sales.Process_ETL.Update'
     #modulo_QuerySkuName='Snowflake.Conections.QueryNameSku'
     #modulo_QueryDemand='Snowflake.Conection.QueryDemand'
     modulo_QuerySales='Snowflake.Conection.QuerySales'
-
+    modulo_sales='Sales.Process_ETL.Update'
+    
 
     # Diccionario de módulos a ejecutar: {nombre_amigable: nombre_del_modulo}
     MODULOS_ETL = {
         #"Demand Update": modulo_demand,
         #"Fill Rate Update": modulo_fill_rate,
-        #"Sales Update": modulo_sales,
         #"Master Customers Update": modulo_customers,
 
         #"Master Products Update": modulo_products,
@@ -109,7 +108,8 @@ def main():
 
         #"QueryDemand": modulo_QueryDemand,
         "QuerySales": modulo_QuerySales,
-
+        "Sales Update": modulo_sales,
+                
         #"QuerySkuName": modulo_QuerySkuName
 
     }
@@ -136,7 +136,7 @@ def main():
     # ===================================================
     SUBJECTS_ETL = [
         "Query Sales ejecutado exitosamente",  # Éxito (lst_subject[0])
-        "🚨 ERROR CRÍTICO: Fallo en ETL - Query Sales Fallo" # Fallo (lst_subject[1])
+        "ERROR: Query Sales Fallo" # Fallo (lst_subject[1])
     ]
     # Definición de Body (Plantillas HTML COMPLETAS)
         # lst_body[0]: Body de Éxito
@@ -144,8 +144,9 @@ def main():
     BODY_TEMPLATE_EXITO = f"""
     <html>
     <body>
-        <h2 style="color: green;">✅ La query que extrae la información de sales de snowflake del presente mes en adelante se ejecuto de manera exitosa
-        y está lista para revisión</h2>
+        <h2 style="color: green;"> La query que extrae la información de sales de snowflake se ejecuto de manera exitosa
+        </h2>
+        <p>Se han actualizado los archivos parquets correspondientes a la informacion consultada.</p>
         
         <p>Saludos.</p>
 
@@ -163,17 +164,17 @@ def main():
     BODY_TEMPLATE_FALLO = f"""
     <html>
     <body>
-        <h2 style="color: red;">🚨 ¡ALERTA! Fallos en la ejecución de la query de sales de snowflake</h2>
+        <h2 style="color: red;"> ¡ALERTA! Fallos en la ejecución de la query de sales de snowflake</h2>
         <p>Estimado equipo,</p>
         <p>La query ha fallado. Se detectaron errores
-        <p>Por esta razón, la información de<b>Demanda</b> <b>NO se ha actualizado</b> o podría contener información incompleta/errónea.</p>
-        
-        
-        <p><b>Detalle de Módulos con Error:</b></p>
-        {{detalle_errores}}
-        
-        <p>Saludos.</p>
+        <p>Por esta razón, la información de<b>Sales</b> <b>NO se ha actualizado</b> o podría contener información incompleta/errónea.</p>
 
+        
+        <p style="margin-top: 20px;">Ya me encuentro trabajando en la solución  para restaurar el flujo correcto. Les notificaré de inmediato en cuanto la nueva versión esté limpia, actualizada y lista para trabajar.</p>
+            
+        <p>Lamento los inconvenientes y agradezco tu comprensión.</p>
+        <p>Saludos.</p>
+        
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
         <b>Sebastian Nuñez.</b><br>
         Data Science & Data Base Analyst.<br>

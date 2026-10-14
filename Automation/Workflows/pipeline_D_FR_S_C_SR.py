@@ -89,19 +89,21 @@ def main():
     modulo_demand='Demand.Process_ETL.Update'
     modulo_fill_rate='Fill_Rate.Process_ETL.Update'
     modulo_sales='Sales.Process_ETL.Update'
+    #modulo_sku_name_datalake='Snowflake.Conection.QuerySales'
 
     # Diccionario de módulos a ejecutar: {nombre_amigable: nombre_del_modulo}
     MODULOS_ETL = {
         "Demand Update": modulo_demand,
         "Fill Rate Update": modulo_fill_rate,
-        "Sales Update": modulo_sales,
+       "Sales Update": modulo_sales,
         "Master Customers Update": modulo_customers,
 
         #"Master Products Update": modulo_products,
         #"HTS Update": modulo_hts,
         #"PWT Update": modulo_pwt,
+       
         "SKU Review Generation": modulo_sku_review
-
+       
     }
     
     # ===============================
@@ -134,9 +136,8 @@ def main():
     BODY_TEMPLATE_EXITO = f"""
     <html>
     <body>
-        <h2 style="color: green;">✅ ¡Proceso ETL Finalizado con Éxito!</h2>
         <p>Hola,</p>
-        <p>La orquestación ETL se ejecutó correctamente, procesando <b>{{total_modulos}} módulos</b> sin registrar errores críticos.</p>
+        <p>El proceso ETL se ejecutó correctamente.</p>
         
         <hr style="border: 1px solid #ccc;">
 
@@ -146,10 +147,10 @@ def main():
             <li>Demand</li>
             <li>Sales</li>
             <li>Fill Rate</li>
-            <li>Master Customers</li>
-            <li>SKU Review  </li>
-
+            <li>Master Customers</li>         
         </ul>
+        <p> El archivo <b>SKU Review</b> se ha actualizado con los nuevos sku provenientes de Demanda, Sales y Fill Rate </p>
+
 
         <p style="margin-top: 30px;">Saludos,</p>
         
@@ -164,26 +165,23 @@ def main():
     BODY_TEMPLATE_FALLO = f"""
     <html>
     <body>
-        <h2 style="color: red;">🚨 ¡ATENCIÓN CRÍTICA! Fallos en la Orquestación ETL</h2>
-        <p>Estimado equipo,</p>
+        <p>Hola,</p>
         <p>El proceso ETL falló. Se detectaron <b>{{num_fallidos}} errores</b> de un total de <b>{{total_modulos}} módulos</b>. Se requiere revisión inmediata.</p>
         
         <p style="font-weight: bold; color: red; margin-top: 15px;">
-            🚫 Proceso Detenido: Hasta que el problema se solucione, la <b>actualización de los Dataflows</b> de Demand, Sales, Fill Rate, Master Customers  y Master Products ha sido <b>paralizada</b> para evitar inyectar datos corruptos.
+            🚫 Proceso Detenido: Hasta que el problema se solucione, la <b>actualización de los Dataflows</b> de Demand, Sales, Fill Rate, Master Customers ha sido <b>paralizada</b> para evitar inyectar datos corruptos.
         </p>
         
         <hr style="border: 1px solid #ccc;">
 
         <h3>Resumen de Errores:</h3>
-        {{detalle_errores}} 
         
-        <p style="margin-top: 20px;">Por favor, revise los logs en el servidor para el detalle completo.</p>
         
         <p style="margin-top: 30px;">Saludos.</p>
         
         <p style="margin-top: 20px; font-family: Calibri, sans-serif; font-size: 11pt;">
             <b>Sebastian Nuñez.</b><br>
-            Data Science & Data Base Analyst.<br>
+            Data Scientist & Data Base Analyst.<br>
             Stanley Black & Decker, Inc.
         </p>
     </body>
@@ -195,7 +193,7 @@ def main():
     # =============================
     
     # Llamada a la función
-    lst_email = ['sebastian.nunez@sbdinc.com']
+    lst_email = ['sebastian.nunez@sbdinc.com','Adrian.Orozco@sbdinc.com']
     send_etl_report(
         resultados_ejecucion, 
         lst_email, 

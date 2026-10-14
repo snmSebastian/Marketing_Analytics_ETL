@@ -116,40 +116,41 @@ def main():
         print('1')
         print(df_update.head())
 
-        df_brasil=df_update[df_update['fk_Country']=='BRAZIL']
-        print('2')
-        print(df_brasil.head())
-
-        df_brasil= df_brasil[
-        (df_brasil['fk_Date'] >= '2023-01-01') & 
-        (df_brasil['fk_Date'] <= '2025-01-01')
+       
+        df_update_filtered= df_update[
+        (df_update['fk_Date'] < '2023-01-01')
         ].copy()
         print('3')
-        print(df_brasil.head())
 
-        lst_columns_sales = ['Source System', 'Document Type', 'fk_Date', 'fk_year_month', 'Week',
-       'fk_Country', 'Sales Type', 'Sales Type Detail',
-       'Sales Type Invoince Country', 'fk_Sold_To_Customer_Code', 'fk_SKU',
-       'fk_date_country_customer_clasification', 'New New/Carryover', 'VR %',
-       'Launch Year', 'Total Sales', 'Total Cost', 'Units Sold',
-       'Units Return', 'NSV', 'FX Rate NSV', 'Selling Unit Price',
-       'NPI Incremental Sales $', 'Num Batteries Sales',
-       'Net Sales NPI w/Combo','fx_nsv_financial']
+        lst_columns_sales = ['Source System', 'Document Type','fk_Date','fk_year_month', 'Week','Region Consolidated','fk_Country','Country Detail',
+                          'Sales Type', 'Sales Type Detail','Sales Type Invoince Country',
+                          'fk_Sold_To_Customer_Code', 'Customer Name','fk_SKU',
+                          'New New/Carryover',
+                          'VR %','Launch Year',
+
+                          'Total Sales', 'Total Cost', 'Units Sold','Units Return','NSV','FX Rate NSV',
+                            'Selling Unit Price',
+                            'NPI Incremental Sales $',
+                            'Num Batteries Sales',
+                            'Net Sales NPI w/Combo',
+                            'fx_nsv_financial',
+                            'Outbound','GSV Local']
         
-        columnas_a_crear=[col for col in lst_columns_sales if col not in df_brasil.columns]
+        columnas_a_crear=[col for col in lst_columns_sales if col not in df_update_filtered.columns]
        
         for col in columnas_a_crear:
-            df_brasil[col] = pd.Series(np.nan, index=df_brasil.index, dtype='object')
-        df_brasil=df_brasil[lst_columns_sales].copy()
+            df_update_filtered[col] = pd.Series(np.nan, index=df_update_filtered.index, dtype='object')
+        df_update_filtered=df_update_filtered[lst_columns_sales].copy()
 
 
-        df_brasil['Source System']='SAP'
-        df_brasil['Document Type']='SAP'
-        df_brasil['fk_year_month']=df_brasil['fk_Date'].str[:7]
+        df_update_filtered['Source System']='SAP'
+        df_update_filtered['Document Type']='SAP'
+        df_update_filtered['fk_year_month']=df_update_filtered['fk_Date'].str[:7]
         print('4')
-        print(df_brasil.head())
+        print(df_update_filtered.head())
         # --- ESCRITURA DE LOS DATOS ACTUALIZADOS ---
-        group_parquet(df_brasil, sales_historic_processed_dir,name='brazil')
+        ruta=r'C:\Users\SSN0609\OneDrive - Stanley Black & Decker\LAG Analytics & Data Repository - Documents\Analytics_Workspace\Data\Processed-Dataflow\Sales\Sales SharePoint 2019-2025\Sales Sharepoint_Format_Datalake\sales_sharepoint_format_datalake.parquet'
+        df_update_filtered.to_parquet(ruta) 
         print("Sales Brazil Update completed successfully. ✅.")
         pass
     except Exception as e:

@@ -33,6 +33,9 @@ import os
 import sys
 from datetime import datetime
 
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 from pathlib import Path
 from Fill_Rate.Process_ETL.Process_Files import clean_sku
 from Master_Products.Update_md_products import create_inverse_brand_map,BRAND_STANDARD_MAP
@@ -42,7 +45,7 @@ from Master_Products.Update_md_products import create_inverse_brand_map,BRAND_ST
 #--- DATAMIND
 #=========================
 def consolidate_files(path_arg,path_mx,path_ch):
-    """
+    r"""
     Consolida los archivos de ventas semanales de Datamind para Argentina, México y Chile.
 
     Lee los archivos Excel de cada país, renombra columnas para estandarización,
@@ -59,12 +62,13 @@ def consolidate_files(path_arg,path_mx,path_ch):
         pd.DataFrame: DataFrame consolidado con los datos de ventas semanales de los tres países.
     """
 
-    #mex
+    #r""" 
+   #mex
     print('leyendo mexico')
-    r1=r'C:\Users\SSN0609\Downloads\Venta-Semanal23.csv'
-    r2=r'C:\Users\SSN0609\Downloads\Venta-Semanal24.csv'
-    r3=r'C:\Users\SSN0609\Downloads\Venta-Semanal25.csv'
-    r4=r'C:\Users\SSN0609\Downloads\Venta-Semanal26mex.csv'
+    r1=r'C:\Users\SSN0609\Downloads\Venta-SemanalMEX23.csv'
+    r2=r'C:\Users\SSN0609\Downloads\Venta-SemanalMEX24.csv'
+    r3=r'C:\Users\SSN0609\Downloads\Venta-SemanalMEX25.csv'
+    r4=r'C:\Users\SSN0609\Downloads\Venta-SemanalMEX26.csv'
     df23=pd.read_csv(r1,dtype=str)
     df24=pd.read_csv(r2,dtype=str)
     df25=pd.read_csv(r3,dtype=str)
@@ -73,10 +77,10 @@ def consolidate_files(path_arg,path_mx,path_ch):
     df_mx=pd.concat([df23,df24,df25,df26])
     #arg
     print('leyendo argentina')
-    ruta23arg=r'C:\Users\SSN0609\Downloads\Venta-Semanal23ARG.csv'
-    ruta24arg=r'C:\Users\SSN0609\Downloads\Venta-Semanal24ARG.csv'
-    ruta25arg=r'C:\Users\SSN0609\Downloads\Venta-Semanal25ARG.csv'
-    ruta26arg=r'C:\Users\SSN0609\Downloads\Venta-Semanal26arge.csv'
+    ruta23arg=r'C:\Users\SSN0609\Downloads\Venta-SemanalARG23.csv'
+    ruta24arg=r'C:\Users\SSN0609\Downloads\Venta-SemanalARG24.csv'
+    ruta25arg=r'C:\Users\SSN0609\Downloads\Venta-SemanalARG25.csv'
+    ruta26arg=r'C:\Users\SSN0609\Downloads\Venta-SemanalARG26.csv'
     df23arg=pd.read_csv(ruta23arg, dtype=str)
     df24arg=pd.read_csv(ruta24arg, dtype=str)
     df25arg=pd.read_csv(ruta25arg, dtype=str)
@@ -84,21 +88,24 @@ def consolidate_files(path_arg,path_mx,path_ch):
     df_arg=pd.concat([df23arg,df24arg,df25arg,df26arg])
     #chi
     print('leyendo chile')
-    ruta23ch=r'C:\Users\SSN0609\Downloads\Venta-Semanal23chi.csv'
-    ruta24ch=r'C:\Users\SSN0609\Downloads\Venta-Semanal24chi.csv'
-    ruta25ch=r'C:\Users\SSN0609\Downloads\Venta-Semanal25chi.csv'
-    ruta26ch=r'C:\Users\SSN0609\Downloads\Venta-Semanal26chile.csv'
+    ruta23ch=r'C:\Users\SSN0609\Downloads\Venta-SemanalCHI23.csv'
+    ruta24ch=r'C:\Users\SSN0609\Downloads\Venta-SemanalCHI24.csv'
+    ruta25ch=r'C:\Users\SSN0609\Downloads\Venta-SemanalCHI25.csv'
+    ruta26ch=r'C:\Users\SSN0609\Downloads\Venta-SemanalCHI26.csv'
     df23ch=pd.read_csv(ruta23ch, dtype=str)
     df24ch=pd.read_csv(ruta24ch, dtype=str)
     df25ch=pd.read_csv(ruta25ch, dtype=str)
     df26ch=pd.read_csv(ruta26ch, dtype=str)
     df_ch=pd.concat([df23ch,df24ch,df25ch,df26ch])
 
+    #"""
+
 
     #df_arg = pd.read_excel(path_arg, header=0,dtype=str)
     #df_mx = pd.read_excel(path_mx, header=0,dtype=str)
     #df_ch = pd.read_excel(path_ch, header=0,dtype=str)
-
+    
+    
     df_ch.rename(columns={'Semana':'Year-Week'},inplace=True)
     df_arg.rename(columns={'Semana':'Year-Week'},inplace=True)
     df_mx.rename(columns={'Semana':'Year-Week'},inplace=True)
@@ -174,16 +181,16 @@ def assing_sales_channel(df_datamind_week):
     lst_canal = 'internet|online|distancia|digital|virtual|ecommerce|e-com'
     lst_retailer = 'mercado libre|e-comm|ecommerce|mercadolibre|amazon'
 
-    mask_retailer = df_datamind_week['Retailer'].str.contains(lst_retailer)
-    mask_canal = df_datamind_week['Local'].str.contains(lst_canal)
+    mask_retailer = df_datamind_week['Retailer'].str.lower().str.contains(lst_retailer)
+    mask_canal = df_datamind_week['Local'].str.lower().str.contains(lst_canal)
     mask_ecom= (mask_retailer|mask_canal)
 
     # Inicializar la columna 'canal_venta' con un valor por defecto
-    df_datamind_week['canal_venta'] = 'store'
+    df_datamind_week['canal_venta'] = 'traditional channel'
     df_datamind_week.loc[mask_ecom, 'canal_venta'] = 'ecommerce'
 
-    df_datamind_week['canal_venta'] = df_datamind_week['canal_venta'].replace(['vacio','moderno','tradicional','tienda'], 'store')
-    df_datamind_week['canal_venta'] = df_datamind_week['canal_venta'].replace(['ecommerce','e-commerce'], 'e-commerce')
+    df_datamind_week['canal_venta'] = df_datamind_week['canal_venta'].replace(['vacio','moderno','tradicional','tienda'], 'traditional channel')
+    df_datamind_week['canal_venta'] = df_datamind_week['canal_venta'].replace(['ecommerce','e-commerce'], 'ecommerce')
     # Asegurar la consistencia de los nombres de canal
     df_datamind_week['canal_venta'] = df_datamind_week['canal_venta'].replace(['e-commerce'], 'ecommerce')
 
@@ -308,17 +315,60 @@ def solution_coppel(df_datamind_week, path_coppel):
     # Retornamos el DataFrame completo actualizado
     return df_final
 
+def nsv_usd(df_datamind_week, path_fx):
+    #  Leer archivo FX optimizando tipos de datos
+    df_fx = pd.read_excel(path_fx, dtype={"Country": str, "Adjusted Rate": float})
+
+    #  Convertir fecha correctamente y crear clave única
+    df_fx["Year-Month"] = pd.to_datetime(df_fx["Date"]).dt.strftime("%Y-%m")
+    df_fx["key"] = (df_fx["Year-Month"] + df_fx["Country"]).str.upper().str.strip()
+
+    # Crear clave en el dataframe principal de forma vectorizada
+    df_datamind_week["key"] = (
+        (df_datamind_week["Year-Month"] + df_datamind_week["Country"])
+        .str.upper()
+        .str.strip()
+    )
+    # Realizar el cruce de datos (Merge)
+    df_datamind_week = pd.merge(
+        df_datamind_week, df_fx[["key", "Adjusted Rate"]], on="key", how="left"
+    )
+
+    # Asegurar tipos numéricos y prevenir divisiones por cero
+    df_datamind_week["Adjusted Rate"] = (
+        df_datamind_week["Adjusted Rate"].astype("float32").fillna(0)
+    )
+
+    df_datamind_week=df_datamind_week.rename(columns={'Venta neta':'Venta neta Local'})
+    #Calcular NSV en USD manejando errores de división
+    df_datamind_week["Venta neta"] = (df_datamind_week["Venta neta Local"].astype("float32") /
+                     df_datamind_week["Adjusted Rate"].replace(0, float("nan")))
+    df_datamind_week["Venta neta"] = df_datamind_week["Venta neta"].fillna(0)
+
+    # 7. Limpiar columnas temporales
+    df_datamind_week = df_datamind_week.drop(columns=["Adjusted Rate", "key","Venta neta Local"])
+
+    return df_datamind_week
+
+
+
 #======================
 # --- MERCADO LIBRE
 #======================
-def meli(path_meli_sales, path_meli_sku,lst_columns):
+def group_meli(path_meli_sales):
+    lst_files_meli = []
+    all_files_meli = path_meli_sales.glob("*meli_sbd*.xlsx")
 
+    # Se anexan los archivos en una sola lista
 
-    # Forzamos la lectura como string para evitar errores de concatenación y pérdida de ceros a la izquierda
-    ruta=r'C:\Users\SSN0609\Downloads\data_meli_hist.parquet'
-    df_meli_sales=pd.read_parquet(ruta)
+    for filename in all_files_meli:
+        df = pd.read_excel(filename, index_col=None, header=0,dtype=str)
+        lst_files_meli.append(df)
+    df_meli_sales = pd.concat(lst_files_meli, axis=0, ignore_index=True)
+    return df_meli_sales
 
-    #df_meli_sales=pd.read_excel(path_meli_sales, dtype=str)
+def meli(df_meli_sales, path_meli_sku,lst_columns):
+
     df_meli_sku=pd.read_excel(path_meli_sku, dtype=str)
 
     # Estandarizar tipos de datos para la columna clave antes del merge
@@ -359,7 +409,7 @@ def meli(path_meli_sales, path_meli_sku,lst_columns):
             df_meli_sales[col] = np.nan
 
     df_meli_sales['canal_venta']='ecommerce'
-    df_meli_sales['Retailer'] = 'Mercado Libre' + '-' + df_meli_sales['Country'].str[:3].str.upper()
+    df_meli_sales['Retailer'] = 'Mercado Libre'
     df_meli_sales['Source']='Mercado Libre'
 
 
@@ -426,7 +476,8 @@ def read_files_parquets(output_path,df,name_file,metrics):
     # Solo aplicamos transformaciones de texto (upper/strip) a columnas que no son métricas ni fechas.
     for col in df_consolidated.columns:
         if col in metrics:
-            df_consolidated[col] = pd.to_numeric(df_consolidated[col], errors='coerce').fillna(0.0)
+            df_consolidated[col] = pd.to_numeric(df_consolidated[col], errors='coerce', downcast='float').fillna(0.0)
+
         elif col == 'Date':
             df_consolidated[col] = pd.to_datetime(df_consolidated[col], errors='coerce')
         else:
@@ -434,96 +485,93 @@ def read_files_parquets(output_path,df,name_file,metrics):
 
     return df_consolidated
 
-def update_datamind_meli(df_datamind_meli,df_meli_sales_historic):
+def update_datamind_meli(df_datamind_meli, df_meli_sales_historic):
     """
-    Realiza una actualización incremental (Upsert) de los datos de ventas a nivel semanal.
-
-    Esta función identifica las semanas presentes en los nuevos datos y las reemplaza
-    en el histórico. Para ello, filtra el DataFrame histórico eliminando los registros
-    de las semanas que van a ser actualizadas y luego concatena los resultados.
-    Incluye lógica de seguridad para manejar DataFrames vacíos y evitar advertencias
-    de deprecación (FutureWarning) en la concatenación.
-
-    Args:
-        df_datamind_meli (pd.DataFrame): DataFrame con la información nueva o actualizada.
-        df_meli_sales_historic (pd.DataFrame): DataFrame con la información histórica del periodo.
-
-    Returns:
-        pd.DataFrame: DataFrame consolidado con las semanas actualizadas y el histórico preservado.
-
-    💡 Nota Senior: Este proceso es vital para la integridad del Data Lake, ya que garantiza
-    la inexistencia de duplicados al sobrescribir semanas completas en lugar de solo agregar filas.
+    Realiza un Upsert incremental optimizado en memoria y velocidad.
+    Evita la duplicación de DataFrames pesados mediante indexación booleana directa.
     """
-    #semanas del historico que seran actualizadas
-    weeks_to_update = df_datamind_meli['Year-Week'].unique()
+    # 1. Validar casos base de forma proactiva para ahorrar cómputo
+    if df_datamind_meli.empty:
+        return df_meli_sales_historic
+    if df_meli_sales_historic.empty:
+        return df_datamind_meli
 
-    #conservo las semanas que SI seran actualizadas
-    df_meli_sales_historic_filtered = df_meli_sales_historic[~df_meli_sales_historic['Year-Week'].isin(weeks_to_update)]
+    # 2. Crear las llaves únicas de forma rápida
+    # En el set nuevo (pequeño), crear la llave concatenada está bien
+    df_datamind_meli['key_update'] = df_datamind_meli['Year-Week'] + df_datamind_meli['Country']
     
-     # Crear una lista de DataFrames a concatenar, excluyendo los que estén vacíos.
-    # Esto evita el FutureWarning al no pasar DataFrames vacíos a pd.concat
-    # y asegura que la inferencia de tipos de datos sea consistente
-    dataframes_to_concat = []
-    if not df_meli_sales_historic_filtered.empty:
-        dataframes_to_concat.append(df_meli_sales_historic_filtered)
-    if not df_datamind_meli.empty:
-        dataframes_to_concat.append(df_datamind_meli)
+    # Convertir a 'set' de Python: la búsqueda con `.isin()` en un set es O(1) (instantánea)
+    weeks_to_update = set(df_datamind_meli['key_update'].unique())
 
-    # Si no hay DataFrames para concatenar (ambos inputs estaban vacíos o se filtraron completamente),
-    # devolver un DataFrame vacío con las columnas correctas.
-    # Se priorizan las columnas de df_datamind_meli si no estaba vacío,
-    # de lo contrario, las de df_meli_sales_historic. Si ambos estaban vacíos, se devuelve un DataFrame sin columnas.
+    # 3. Filtrar el histórico SIN crear columnas nuevas en él
+    # Concatenamos de forma virtual en la evaluación booleana para ahorrar RAM
+    historic_keys = df_meli_sales_historic['Year-Week'] + df_meli_sales_historic['Country']
+    
+    # Máscara booleana: Mantenemos solo lo que NO está en el set de actualización
+    mask_to_keep = ~historic_keys.isin(weeks_to_update)
 
-    if not dataframes_to_concat:
-        if not df_datamind_meli.empty:
-            return pd.DataFrame(columns=df_datamind_meli.columns)
-        elif not df_meli_sales_historic.empty:
-            return pd.DataFrame(columns=df_meli_sales_historic.columns)
-        else:
-            return pd.DataFrame()
+    # 4. Filtrar por asignación directa (In-place filtering simulado)
+    # Conservamos solo las filas deseadas del histórico usando la máscara
+    df_meli_sales_historic_filtered = df_meli_sales_historic.loc[mask_to_keep]
 
-    df_meli_sales_update = pd.concat(dataframes_to_concat, ignore_index=True)
+    # 5. Limpieza preventiva de la columna temporal en el set nuevo
+    df_datamind_meli = df_datamind_meli.drop(columns=['key_update'])
+
+    # 6. Concatenación final directa
+    # Ya validamos arriba que ninguno de los dos está vacío si llega a este punto
+    df_meli_sales_update = pd.concat(
+        [df_meli_sales_historic_filtered, df_datamind_meli], 
+        ignore_index=True
+    )
+
     return df_meli_sales_update
+
 
         
 #===============
 #--- SAVE
 #===============
-def group_parquet(df_processed, output_path, name=str):
-    """ Guarda un dataframe consolidado en archivos Parquet segmentados por año-mes.
-    Args:
-        df_processed (pd.DataFrame): DataFrame ya limpio y procesado. Debe contener la columna 'fk_year_month'.
-        output_path (str): Ruta del directorio donde se guardarán los archivos Parquet particionados.
-        name (str, optional): Prefijo para los nombres de los archivos Parquet generados. Por defecto es 'fill_rate'. 
-
-    Returns:
-        None: La función no devuelve un valor, sino que guarda los archivos en el disco.
+def group_parquet(df_processed, output_path, name="Datamind_Meli_Sales"):
     """
-    # 1. Asegurar que la carpeta destino existe (evita errores de I/O)
+    Guarda el dataframe segmentado por año-mes en archivos planos.
+    Optimizado al extremo para baja RAM usando máscaras booleanas iterativas,
+    evitando la conversión del bloque completo de 70 millones de filas.
+    """
+    # 1. Asegurar carpeta destino
     os.makedirs(output_path, exist_ok=True)
 
-    # 2. Agrupamos
-    # Se crea un mapeo de indices donde
-        # llave: fk_year_month
-        #valor: indice de filas que poseen dicha llave
-    df_processed['year']=df_processed['Year-Week'].str[:4]
-    
-    groups = df_processed.groupby('Year-Month', sort=False)
+    # 2. Obtener los periodos únicos de forma nativa y rápida
+    unique_periods = df_processed['Year-Month'].unique()
 
-    for period, group in groups:
-        # Construcción eficiente de la ruta
+    # 3. Procesar un mes a la vez para no saturar la memoria RAM
+    for period in unique_periods:
+        # Construcción de la ruta plana requerida
         filename = f"{name}_{period}.parquet"
         full_path = os.path.join(output_path, filename)
         
-        # 3. Guardar: Usamos el engine 'pyarrow' explícitamente (es el más rápido)
-        # y desactivamos el índice para ahorrar espacio y tiempo de cómputo.
-        group.to_parquet(
+        # Crear una máscara booleana para extraer SOLO las filas de este mes
+        # .loc con máscara no duplica todo el bloque de memoria numérico
+        df_month = df_processed.loc[df_processed['Year-Month'] == period]
+        
+        # Si el mes no tiene datos por alguna razón, saltar
+        if df_month.empty:
+            continue
+
+        # Convertir a PyArrow únicamente el fragmento pequeño de ese mes
+        table_month = pa.Table.from_pandas(df_month, preserve_index=False)
+        
+        # Escritura a disco directa e inmediata
+        pq.write_table(
+            table_month, 
             full_path, 
-            index=False, 
-            engine='pyarrow', 
-            compression='snappy' # Equilibrio perfecto entre peso y velocidad
+            compression='snappy',
+            use_dictionary=True
         )
-    
+        
+        # Liberación explícita del fragmento antes de ir al siguiente mes
+        del df_month
+        del table_month
+   
 
 
 #==============
@@ -541,4 +589,13 @@ def edas(path_edas,lst_columns_datamind):
             df_edas[col] = pd.to_numeric(df_edas[col], errors='coerce').fillna(0.0)
     df_edas['Retailer']=df_edas['Retailer'].replace({'AMAZON.COM SERVICES INC':'Amazon'})
     df_edas['Source']='EDAS'
+
+    cust_upper = df_edas['Retailer'].astype(str).str.upper()
+    condiciones_clientes = [
+                cust_upper.str.contains('EASY|SODIMAC', na=False),
+                cust_upper.str.contains('AMAZON', na=False)
+            ]
+    resultados_clientes = ['MODERM CHANNEL', 'ECOMMERCE']
+            
+    df_edas['Retailer'] = np.select(condiciones_clientes, resultados_clientes, 'TRADITIONAL CHANNEL')
     return df_edas

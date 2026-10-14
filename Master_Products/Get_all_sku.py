@@ -99,49 +99,46 @@ def main():
     #---- RUTAS DE LOS ARCHIVOS
     #-------------------------------
     try:
-        from config_paths import MasterProductsPaths,FillRatePaths,SalesPaths,DemandPaths
+        from config_paths import MasterProductsPaths,FillRatePaths,SalesPaths,DemandPaths,SodimacPaths,Datamind_PATHS
         path_fill_rate_historic=FillRatePaths.OUTPUT_PROCESSED_PARQUETS_DIR
         path_sales_historic=SalesPaths.OUTPUT_PROCESSED_PARQUETS_DIR
         path_demand_update=DemandPaths.OUTPUT_PROCESSED_PARQUETS_DIR
+        path_sodimac=SodimacPaths.OUTPUT_PROCESSED_PARQUETS_DIR_EDAS
+        path_datamind=Datamind_PATHS.OUTPUT_PROCESSED_PARQUETS_DIR
                 
         path_New_Products=MasterProductsPaths.INPUT_RAW_ConsultaSKU_FILE    
-        path_gpp=MasterProductsPaths.INPUT_PROCESSED_GPP_BRAND_FILE
-        path_psd=MasterProductsPaths.INPUT_RAW_SHARED_PSD_FILE
-        path_sku_snowflake=MasterProductsPaths.INPUT_RAW_SkuName_FILE
-
-
-        #path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE_PRUEBA
-        path_master_products=MasterProductsPaths.OUTPUT_PROCESSED_MASTER_PRODUCTS_FILE
-        
         #-----------------------------
         #----  Cargo dataframes
         #-----------------------------
         df_fill_rate=consolidar_parquets(path_fill_rate_historic)
-        df_sales=consolidar_parquets(path_sales_historic)
+        df_sales=pd.read_parquet(path_sales_historic)
         df_demand=consolidar_parquets(path_demand_update)
-
-        df_master_products=pd.read_excel(path_master_products, dtype=str, engine='openpyxl')
-        df_sku_review=pd.read_excel(path_New_Products, dtype=str, engine='openpyxl')
-
-        df_gpp=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='GPP')
-        df_brand=pd.read_excel(path_gpp, dtype=str, engine='openpyxl',sheet_name='Brand')
-        df_psd=pd.read_excel(path_psd, dtype=str, engine='openpyxl')
-        df_snowflake=pd.read_parquet(path_sku_snowflake, engine='pyarrow')
-
+        df_sodimac=consolidar_parquets(path_sodimac)
+        df_datamind=consolidar_parquets(path_datamind)
+        print(df_sodimac.columns)
 
         #-------------------------
         # Limpieza SKU
         #-------------------------
         df_fill_rate=clean_sku(df_fill_rate,'fk_SKU')
+        df_fill_rate['source']='fr'
+        print('1')
         df_sales=clean_sku(df_sales,'fk_SKU')
+        df_sales['source']='sales'
+        print('2')
         df_demand=clean_sku(df_demand,'fk_SKU')
-        df_master_products=clean_sku(df_master_products,'SKU')
-        df_sku_review=clean_sku(df_sku_review,'SKU')
-        df_psd=clean_sku(df_psd,'SKU')
-        df_snowflake=clean_sku(df_snowflake,'SKU')
-        df_all_sku=pd.concat([df_fill_rate['fk_SKU'],df_sales['fk_SKU'],
-                              df_demand['fk_SKU']],ignore_index=True)
-        df_all_sku=df_all_sku.drop_duplicates()
+        df_demand['source']='demand'
+        print('3')
+        df_datamind=clean_sku(df_datamind,'SKU')
+        df_datamind['source']='datamind'
+        print('4')
+        df_sodimac=clean_sku(df_sodimac,'PROD_KEY')
+        df_sodimac['source']='sodimac'
+        print('5')
+        lst_columns=['fk_SKU','source']
+        df_all_sku=pd.concat([df_fill_rate[lst_columns],df_sales[lst_columns],
+                              df_demand[lst_columns]],ignore_index=True)
+        df_all_sku=df_all_sku.drop_duplicates('fk_SKU')
         df_all_sku.to_excel(path_New_Products, index=False) # Se guarda la lista consolidada de SKUs en el archivo de consulta.
     except Exception as e:
         print(f'Error: {e}')
